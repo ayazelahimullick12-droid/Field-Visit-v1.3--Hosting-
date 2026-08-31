@@ -1,0 +1,382 @@
+{
+  "employees": [
+    {
+      "id": "EMP-DEMO01",
+      "name": "Ayaz Elahi",
+      "phone": "01700000000",
+      "pin": "1234",
+      "createdAt": "2026-08-01T09:00:00.000Z"
+    },
+    {
+      "id": "EMP-B4LND3",
+      "name": "Ami Ayaz",
+      "phone": "01753954832",
+      "pin": "12345678",
+      "createdAt": "2026-08-31T07:22:14.181Z"
+    }
+  ],
+  "visits": [
+    {
+      "id": "V-B0J15L",
+      "employeeId": "EMP-B4LND3",
+      "employeeName": "Ami Ayaz",
+      "location": "",
+      "locationType": "branch",
+      "division": "",
+      "region": "",
+      "area": "",
+      "date": "",
+      "visitTime": "",
+      "returnDate": "",
+      "returnTime": "",
+      "reason": "Monitoring",
+      "duration": "",
+      "steps": {
+        "register": false,
+        "feedback": false,
+        "complaints": false,
+        "story": false
+      },
+      "feedback": null,
+      "complaints": [],
+      "story": null
+    },
+    {
+      "id": "V-MICVPR",
+      "employeeId": "EMP-B4LND3",
+      "employeeName": "Ami Ayaz",
+      "location": "",
+      "locationType": "branch",
+      "division": "",
+      "region": "",
+      "area": "",
+      "date": "",
+      "visitTime": "",
+      "returnDate": "",
+      "returnTime": "",
+      "reason": "Monitoring",
+      "duration": "",
+      "steps": {
+        "register": false,
+        "feedback": false,
+        "complaints": false,
+        "story": false
+      },
+      "feedback": null,
+      "complaints": [],
+      "story": null
+    },
+    {
+      "id": "V-OV2W3X",
+      "employeeId": "EMP-B4LND3",
+      "employeeName": "Ami Ayaz",
+      "location": "Dhanmondi Branch",
+      "locationType": "branch",
+      "division": "Dhaka Division",
+      "region": "Dhaka Region",
+      "area": "Dhaka Metro Area",
+      "date": "2026-08-31",
+      "visitTime": "16:25",
+      "returnDate": "2026-09-05",
+      "returnTime": "13:27",
+      "reason": "Undefined",
+      "duration": "4 days 21 hrs 2 mins",
+      "steps": {
+        "register": true,
+        "feedback": false,
+        "complaints": false,
+        "story": false
+      },
+      "feedback": null,
+      "complaints": [],
+      "story": null
+    },
+    {
+      "id": "V-5MS46F",
+      "employeeId": "EMP-DEMO01",
+      "employeeName": "Ayaz Elahi",
+      "location": "",
+      "locationType": "branch",
+      "division": "",
+      "region": "",
+      "area": "",
+      "date": "",
+      "visitTime": "",
+      "returnDate": "",
+      "returnTime": "",
+      "reason": "Monitoring",
+      "duration": "",
+      "steps": {
+        "register": false,
+        "feedback": false,
+        "complaints": false,
+        "story": false
+      },
+      "feedback": null,
+      "complaints": [],
+      "story": null
+    },
+    {
+      "id": "V-UD5OKO",
+      "employeeId": "EMP-DEMO01",
+      "employeeName": "Ayaz Elahi",
+      "location": "Savar Branch",
+      "locationType": "branch",
+      "division": "Dhaka Division",
+      "region": "Dhaka Region",
+      "area": "Narayanganj Area",
+      "date": "2026-08-28",
+      "visitTime": "10:33",
+      "returnDate": "2026-09-05",
+      "returnTime": "10:37",
+      "reason": "Monitoring",
+      "duration": "8 days 4 mins",
+      "steps": {
+        "register": true,
+        "feedback": true,
+        "complaints": true,
+        "story": true
+      },
+      "feedback": {
+        "staff": {
+          "tags": [
+            "Branch well-run"
+          ],
+          "rating": 5,
+          "notes": ""
+        },
+        "member": {
+          "tags": [
+            "Client satisfaction high",
+            "Access issues"
+          ],
+          "rating": 5,
+          "notes": "",
+          "count": ""
+        },
+        "activeType": "member"
+      },
+      "complaints": [
+        {
+          "id": "FC-GW1SPF",
+          "source": "staff",
+          "department": "Construction",
+          "description": "Leaking Walls",
+          "urgency": "Medium",
+          "consent": null,
+          "status": "Open",
+          "filedBy": "Ayaz Elahi",
+          "visitId": "V-UD5OKO",
+          "filedDate": "2026-08-28",
+          "assignedTo": null,
+          "supervisor": null,
+          "deadline": null,
+          "escalationApproved": false,
+          "resolutionNotes": null,
+          "log": [
+            {
+              "label": "Complaint submitted",
+              "time": "8/25/2026, 10:34:54 AM"
+            }
+          ]
+        },
+        {
+          "id": "FC-SEAS8T",
+          "source": "member",
+          "department": "Finance",
+          "description": "Wants a larger Loan",
+          "urgency": "Medium",
+          "consent": true,
+          "status": "Open",
+          "filedBy": "Ayaz Elahi",
+          "visitId": "V-UD5OKO",
+          "filedDate": "2026-08-28",
+          "assignedTo": null,
+          "supervisor": null,
+          "deadline": null,
+          "escalationApproved": false,
+          "resolutionNotes": null,
+          "log": [
+            {
+              "label": "Complaint submitted",
+              "time": "8/25/2026, 10:34:54 AM"
+            }
+          ]
+        }
+      ],
+      "story": {
+        "caption": "This branch was amazing",
+        "posted": true,
+        "likes": 0,
+        "comments": 0,
+        "gradient": "linear-gradient(135deg,#B7791F 0%,#5C3A0A 100%)"
+      }
+    },
+    {
+      "id": "V-DEMO01",
+      "employeeId": "EMP-DEMO01",
+      "employeeName": "Ayaz Elahi",
+      "location": "Dhanmondi Branch",
+      "locationType": "branch",
+      "division": "Dhaka Division",
+      "region": "Dhaka Region",
+      "area": "Dhaka Metro Area",
+      "date": "2026-08-10",
+      "visitTime": "09:00",
+      "returnDate": "2026-08-11",
+      "returnTime": "09:00",
+      "reason": "Monitoring",
+      "duration": "1 day",
+      "steps": {
+        "register": true,
+        "feedback": true,
+        "complaints": true,
+        "story": true
+      },
+      "feedback": {
+        "staff": {
+          "tags": [
+            "Branch well-run"
+          ],
+          "rating": 5,
+          "notes": "Loan officers well organized, clients arrived on schedule."
+        },
+        "member": {
+          "tags": [
+            "Client satisfaction high"
+          ],
+          "rating": 5,
+          "notes": "",
+          "count": "14"
+        },
+        "activeType": "staff"
+      },
+      "complaints": [
+        {
+          "id": "FC-DEMO01",
+          "source": "staff",
+          "department": "Software",
+          "description": "Field app crashes when uploading photos over 3G connections, losing unsaved visit data.",
+          "urgency": "Medium",
+          "consent": true,
+          "status": "In Progress",
+          "filedBy": "Ayaz Elahi",
+          "visitId": "V-DEMO01",
+          "filedDate": "2026-08-10",
+          "assignedTo": "Tariqul Islam",
+          "supervisor": "Chief Technology Officer",
+          "deadline": "2026-08-27",
+          "escalationApproved": false,
+          "resolutionNotes": null,
+          "log": [
+            {
+              "label": "Complaint submitted",
+              "time": "Aug 10, 4:20 PM"
+            },
+            {
+              "label": "Assigned to Software department (Tariqul Islam - least workload: 0 active items)",
+              "time": "Aug 11, 9:00 AM"
+            }
+          ]
+        }
+      ],
+      "story": {
+        "caption": "Great energy at Dhanmondi today — client group meeting ran smoothly and the new record book system is working well.",
+        "posted": true,
+        "likes": 24,
+        "comments": 4,
+        "gradient": "linear-gradient(135deg,#EC008C 0%,#7A1FA2 100%)"
+      }
+    },
+    {
+      "id": "V-DEMO02",
+      "employeeId": "EMP-DEMO01",
+      "employeeName": "Ayaz Elahi",
+      "location": "Mirpur Branch",
+      "locationType": "branch",
+      "division": "Dhaka Division",
+      "region": "Dhaka Region",
+      "area": "Dhaka Metro Area",
+      "date": "2026-08-11",
+      "visitTime": "10:00",
+      "returnDate": "2026-08-11",
+      "returnTime": "14:00",
+      "reason": "Complaint resolution",
+      "duration": "4 hrs",
+      "steps": {
+        "register": true,
+        "feedback": true,
+        "complaints": true,
+        "story": false
+      },
+      "feedback": {
+        "staff": {
+          "tags": [
+            "Process delays",
+            "Needs equipment"
+          ],
+          "rating": 3,
+          "notes": "Printer for loan agreements has been down for two weeks."
+        },
+        "member": {
+          "tags": [],
+          "rating": 0,
+          "notes": "",
+          "count": ""
+        },
+        "activeType": "staff"
+      },
+      "complaints": [
+        {
+          "id": "FC-DEMO02",
+          "source": "staff",
+          "department": "Construction",
+          "description": "Roof leak in Mirpur branch office damaging client record cabinets during monsoon rains.",
+          "urgency": "High",
+          "consent": true,
+          "status": "Open",
+          "filedBy": "Ayaz Elahi",
+          "visitId": "V-DEMO02",
+          "filedDate": "2026-08-11",
+          "assignedTo": null,
+          "supervisor": null,
+          "deadline": null,
+          "escalationApproved": false,
+          "resolutionNotes": null,
+          "log": [
+            {
+              "label": "Complaint submitted",
+              "time": "Aug 11, 11:15 AM"
+            }
+          ]
+        }
+      ],
+      "story": null
+    },
+    {
+      "id": "V-DEMO03",
+      "employeeId": "EMP-DEMO01",
+      "employeeName": "Ayaz Elahi",
+      "location": "Savar Branch",
+      "locationType": "branch",
+      "division": "Dhaka Division",
+      "region": "Dhaka Region",
+      "area": "Narayanganj Area",
+      "date": "2026-08-12",
+      "visitTime": "09:00",
+      "returnDate": "2026-08-14",
+      "returnTime": "09:00",
+      "reason": "Survey",
+      "duration": "2 days",
+      "steps": {
+        "register": true,
+        "feedback": false,
+        "complaints": false,
+        "story": false
+      },
+      "feedback": null,
+      "complaints": [],
+      "story": null
+    }
+  ]
+}
