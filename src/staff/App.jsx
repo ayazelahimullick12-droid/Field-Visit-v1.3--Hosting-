@@ -1,12 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   MapPin, Calendar, Clock, ChevronRight, ChevronLeft, Plus, X, Check,
   Camera, Star, Heart, MessageCircle, Share2, ArrowLeft, CheckCircle2,
   Send, Timer, Building2, Home, Mail, Lock, LogIn, ShieldCheck,
-  User, Phone, UserPlus, LogOut
+  User, Phone, UserPlus, LogOut, Wrench
 } from "lucide-react";
 import { usePersistedCollection } from "../lib/usePersistedCollection";
 import { makeId } from "../lib/ids";
+import { useTheme } from "../lib/theme";
+import ThemeToggle from "../lib/ThemeToggle";
+import AuthScreen from "../lib/AuthScreen";
 
 /* =========================================================================
    DESIGN TOKENS & STYLES
@@ -40,6 +43,23 @@ const STYLES = `
     --shadow-pop: 0 12px 32px rgba(29,30,34,0.16);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
+  [data-theme="dark"]{
+    --ink:#F2F2F5; --ink-soft:#B9BAC4; --ink-faint:#83848F;
+    --line:#33343C; --line-soft:#2A2B32; --paper:#141419; --card:#1D1E24;
+    --magenta-wash:#3A1530; --magenta-wash-2:#4A1B3D;
+    --success-wash:#123423; --warning-wash:#3A2D0F; --danger-wash:#3A1418; --info-wash:#122A44;
+    --shadow-card: 0 1px 2px rgba(0,0,0,0.35), 0 4px 14px rgba(0,0,0,0.4);
+    --shadow-pop: 0 12px 32px rgba(0,0,0,0.6);
+  }
+  .theme-toggle{ width:32px;height:32px;border-radius:999px;border:1px solid var(--line); background:var(--card);
+                 color:var(--ink-soft); display:flex;align-items:center;justify-content:center; cursor:pointer; flex-shrink:0; }
+  .theme-toggle:hover{ background:var(--line-soft); }
+  .admin-login-link{ position:fixed; bottom:16px; right:18px; font-size:11.5px; font-weight:650; color:var(--ink-faint);
+                      background:var(--card); border:1px solid var(--line); padding:7px 12px; border-radius:999px;
+                      text-decoration:none; box-shadow:var(--shadow-card); }
+  .admin-login-link:hover{ color:var(--magenta-dark); border-color:var(--magenta-wash-2); }
+  html, body{ margin:0; padding:0; background:var(--paper); }
+  #root{ min-height:100vh; background:var(--paper); }
   .fvt{ background:var(--paper); color:var(--ink); min-height:100vh; font-family:'Inter',sans-serif; }
 
   .login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center;
@@ -54,7 +74,7 @@ const STYLES = `
   .login-card .field-group + .field-group{ margin-top:16px; }
   .login-input-wrap{ position:relative; }
   .login-input-icon{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-faint); pointer-events:none; }
-  .login-input{ padding-left:36px; }
+  .login-input.input{ padding-left:36px; }
   .login-card .btn-block{ margin-top:24px; }
   .login-divider{ display:flex; align-items:center; gap:10px; margin:18px 0; color:var(--ink-faint);
                    font-size:11px; text-transform:uppercase; letter-spacing:0.05em; }
@@ -64,6 +84,9 @@ const STYLES = `
   .auth-tabs{ display:flex; background:var(--line-soft); border-radius:9px; padding:3px; gap:2px; margin-top:18px; }
   .auth-tab{ flex:1; border:none; background:transparent; padding:8px; border-radius:7px; font-size:12.5px; font-weight:650; color:var(--ink-soft); cursor:pointer; }
   .auth-tab.active{ background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+  .auth-subtabs{ display:flex; gap:16px; margin-top:16px; margin-bottom:4px; border-bottom:1px solid var(--line); }
+  .auth-subtab{ border:none; background:transparent; padding:0 0 9px; font-size:12.5px; font-weight:650; color:var(--ink-faint); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .auth-subtab.active{ color:var(--magenta-dark); border-bottom-color:var(--magenta); }
   .fvt *{ box-sizing:border-box; }
   .mono{ font-family:'IBM Plex Mono','SF Mono',monospace; letter-spacing:-0.01em; }
 
@@ -205,6 +228,10 @@ const STYLES = `
   .urgency-Medium{ background:var(--warning-wash); color:var(--warning); }
   .urgency-High{ background:var(--danger-wash); color:var(--danger); }
   .source-badge{ font-size:10px; font-weight:750; padding:3px 8px; border-radius:6px; text-transform:uppercase; background:var(--line-soft); color:var(--ink-soft); }
+  .status-pill{ font-size:10.5px; font-weight:750; padding:4px 9px; border-radius:999px; white-space:nowrap; }
+  .status-Open{ background:var(--danger-wash); color:var(--danger); }
+  .status-InProgress{ background:var(--info-wash); color:var(--info); }
+  .status-Resolved{ background:var(--success-wash); color:var(--success); }
 
   .upload-box{ border:1.5px dashed var(--line); border-radius:12px; padding:34px 20px; text-align:center; color:var(--ink-faint);
                cursor:pointer; background:var(--paper); }
@@ -238,16 +265,80 @@ const STYLES = `
   .toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff;
           padding:12px 20px; border-radius:10px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px;
           box-shadow:var(--shadow-pop); z-index:200; }
+  .session-loading{ min-height:100vh; display:flex; align-items:center; justify-content:center; }
+  .session-loading .nav-logo{ animation:fvt-pulse 1.1s ease-in-out infinite; }
+  @keyframes fvt-pulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:0.55; transform:scale(0.92); } }
+
+  .score-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:26px; }
+  .score-card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:16px; text-align:center; box-shadow:var(--shadow-card); }
+  .score-num{ font-size:24px; font-weight:800; letter-spacing:-0.02em; }
+  .score-label{ font-size:11.5px; color:var(--ink-faint); font-weight:600; margin-top:4px; }
+  .complaint-card{ background:var(--card); }
+  .timeline{ margin-top:6px; }
+  .tl-item{ display:flex; gap:12px; padding-bottom:12px; }
+  .tl-item:last-child{ padding-bottom:0; }
+  .tl-dot-wrap{ display:flex; flex-direction:column; align-items:center; }
+  .tl-dot{ width:8px; height:8px; border-radius:999px; background:var(--magenta); margin-top:4px; flex-shrink:0; }
+  .tl-bar{ width:2px; flex:1; background:var(--line); margin-top:2px; }
+  .tl-label{ font-size:12px; font-weight:700; }
+  .tl-time{ font-size:10.5px; color:var(--ink-faint); }
 
   @media (max-width: 720px){
     .visit-grid{ grid-template-columns:1fr; }
     .field-row{ grid-template-columns:1fr; }
     .feed-grid{ grid-template-columns:1fr; }
+    .page{ padding:16px 14px 90px; }
+    .nav{ padding:10px 14px; }
+    .nav-sub{ display:none; }
+    .nav-title{ font-size:14px; }
+    h1.h-title{ font-size:19px; }
+    .modal-veil{ padding:0; align-items:flex-end; }
+    .modal-box{ max-width:100%; width:100%; border-radius:16px 16px 0 0; max-height:92vh; overflow-y:auto; }
+    .login-card{ padding:28px 20px 22px; max-width:100%; }
+    .stat-row, .score-row{ grid-template-columns:repeat(2,1fr); }
+    .admin-login-link{ bottom:12px; right:12px; font-size:11px; padding:6px 10px; }
   }
   @media (max-width: 980px) and (min-width: 721px){
     .feed-grid{ grid-template-columns:1fr 1fr; }
   }
+
+  /* Elements with box-shadow, promoted to their own compositing layer — fixes
+     the well-known iOS Safari bug where shadow+radius elements flicker
+     (repaint) during scroll instead of staying put. */
+  .card, .login-card, .wizard-shell, .visit-card, .story-card, .modal-box,
+  .score-card, .admin-login-link{
+    -webkit-transform:translateZ(0); transform:translateZ(0);
+    -webkit-backface-visibility:hidden; backface-visibility:hidden;
+  }
 `;
+
+/* ------------------------------- API ACTION HELPERS -------------------------------
+   Used only by the Fixer Queue tab (see FixerQueue below), which is the one part
+   of the staff app that needs the server's business-logic endpoints rather than
+   plain collection GET/PUT — see server/logic.js for what these actually do.
+   ----------------------------------------------------------------------------------- */
+
+const API_BASE = "/api";
+
+async function postAction(path, body) {
+  const res = await fetch(`${API_BASE}/actions/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Action failed");
+  return json;
+}
+
+// Server-side actions mutate visits/db.json directly, bypassing the usual
+// client PUT — so after calling one, pull the fresh collection back down.
+async function refetchCollection(name, setter) {
+  const res = await fetch(`${API_BASE}/${name}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  setter(() => data);
+}
 
 /* ------------------------------- MOCK REFERENCE DATA -------------------------------
    These are fixed organisational reference lists (branch/office structure, dropdown
@@ -316,6 +407,73 @@ const photoGradients = [
 
 const initials = (name) => (name || "?").split(" ").map(p => p[0]).join("").slice(0,2).toUpperCase();
 
+/* ---------- Real photo capture (complaints & stories) ----------
+   Files are read client-side, downscaled onto a canvas (so a phone photo
+   doesn't balloon the JSON database), and stored as a data URL directly on
+   the complaint/story record. No separate file server — fine for a
+   prototype, but worth swapping for real object storage before this holds
+   a lot of production traffic. */
+
+function resizeImageFile(file, maxDim = 1000, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function PhotoUploadBox({ photoUrl, onChange, hint }) {
+  const inputRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    setBusy(true);
+    try {
+      const dataUrl = await resizeImageFile(file);
+      onChange(dataUrl);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="upload-box" style={photoUrl ? { padding: 0, overflow: "hidden" } : undefined}>
+      <input ref={inputRef} type="file" accept="image/*" capture="environment"
+             style={{ display: "none" }} onChange={handleFile} />
+      {photoUrl ? (
+        <div style={{ position: "relative" }}>
+          <img src={photoUrl} alt="Attached" style={{ width: "100%", maxHeight: 220, objectFit: "cover", display: "block", borderRadius: 10 }} />
+          <div style={{ position: "absolute", bottom: 8, right: 8, display: "flex", gap: 6 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => inputRef.current?.click()}>Replace</button>
+            <button className="btn btn-secondary btn-sm" onClick={() => onChange(null)}><X size={12} /></button>
+          </div>
+        </div>
+      ) : (
+        <div onClick={() => !busy && inputRef.current?.click()} style={{ cursor: "pointer" }}>
+          <Camera size={26} style={{ marginBottom: 8 }} />
+          <div style={{ fontWeight: 650, fontSize: 13, color: "var(--ink)" }}>{busy ? "Processing…" : "Tap to add a photo"}</div>
+          <div style={{ fontSize: 11.5, marginTop: 2 }}>{hint || "JPG or PNG"}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function computeDuration(startDate, startTime, endDate, endTime) {
   if (!startDate || !startTime || !endDate || !endTime) return "";
   const start = new Date(`${startDate}T${startTime}`);
@@ -361,156 +519,91 @@ function RingProgress({ done, total }) {
 }
 
 /* ================================ AUTH ================================ */
-// Real accounts: name + phone number + employee PIN, checked against the
-// "employees" collection in the JSON database (server/db.json). Login only
-// sets which employee is "active" in this browser tab — it doesn't create
-// or change any stored data.
-
-function AuthScreen({ employees, onRegister, onLogin }) {
-  const [mode, setMode] = useState("login"); // "login" | "register"
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState("");
-
-  const resetFields = () => { setName(""); setPhone(""); setPin(""); setError(""); };
-
-  const switchMode = (m) => { setMode(m); resetFields(); };
-
-  const handleLogin = () => {
-    setError("");
-    if (!phone.trim() || !pin.trim()) {
-      setError("Enter your phone number and PIN.");
-      return;
-    }
-    const match = employees.find(e => e.phone === phone.trim() && e.pin === pin.trim());
-    if (!match) {
-      setError("No account matches that phone number and PIN.");
-      return;
-    }
-    onLogin(match);
-  };
-
-  const handleRegister = () => {
-    setError("");
-    if (!name.trim() || !phone.trim() || !pin.trim()) {
-      setError("Fill in your name, phone number, and a PIN.");
-      return;
-    }
-    if (!/^\d{4,8}$/.test(pin.trim())) {
-      setError("PIN should be 4–8 digits.");
-      return;
-    }
-    if (employees.some(e => e.phone === phone.trim())) {
-      setError("That phone number is already registered — try logging in instead.");
-      return;
-    }
-    const newEmployee = {
-      id: makeId("EMP"),
-      name: name.trim(),
-      phone: phone.trim(),
-      pin: pin.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    onRegister(newEmployee);
-  };
-
-  return (
-    <div className="login-screen">
-      <div className="login-card">
-        <div className="login-logo"><MapPin size={20} color="#fff" /></div>
-        <h1 className="login-title">Field Visit Tracker</h1>
-        <p className="login-sub">BRAC Microfinance Programme · Technology Unit</p>
-
-        <div className="auth-tabs">
-          <button className={`auth-tab ${mode === "login" ? "active" : ""}`} onClick={() => switchMode("login")}>Sign in</button>
-          <button className={`auth-tab ${mode === "register" ? "active" : ""}`} onClick={() => switchMode("register")}>Create account</button>
-        </div>
-
-        {mode === "register" && (
-          <div className="field-group">
-            <label className="field-label">Full name</label>
-            <div className="login-input-wrap">
-              <User size={15} className="login-input-icon" />
-              <input className="input login-input" type="text" placeholder="Ayaz Elahi"
-                     value={name} onChange={e => setName(e.target.value)} />
-            </div>
-          </div>
-        )}
-
-        <div className="field-group">
-          <label className="field-label">Phone number</label>
-          <div className="login-input-wrap">
-            <Phone size={15} className="login-input-icon" />
-            <input className="input login-input" type="tel" placeholder="017XXXXXXXX"
-                   value={phone} onChange={e => setPhone(e.target.value)} />
-          </div>
-        </div>
-
-        <div className="field-group">
-          <label className="field-label">Employee PIN</label>
-          <div className="login-input-wrap">
-            <Lock size={15} className="login-input-icon" />
-            <input className="input login-input" type="password" inputMode="numeric" placeholder="4–8 digits"
-                   value={pin} onChange={e => setPin(e.target.value)} />
-          </div>
-          {mode === "register" && <p className="field-hint">You'll use this PIN together with your phone number to sign in next time.</p>}
-        </div>
-
-        {error && <div className="login-error">{error}</div>}
-
-        {mode === "login" ? (
-          <button className="btn btn-primary btn-block" onClick={handleLogin}>
-            <LogIn size={15} /> Sign in
-          </button>
-        ) : (
-          <button className="btn btn-primary btn-block" onClick={handleRegister}>
-            <UserPlus size={15} /> Create account
-          </button>
-        )}
-
-        <p className="login-footer">Your account is stored locally in this app's database — it isn't shared outside this deployment.</p>
-      </div>
-    </div>
-  );
-}
+// Login/registration now lives in a shared component (src/lib/AuthScreen.jsx)
+// used by both the Staff and Fixer apps — every employee is tracked by a
+// unique PIN and can sign in with just that PIN, or with email + password.
 
 /* ================================ APP ================================ */
 
-export default function App() {
-  const [employees, setEmployees] = usePersistedCollection("employees", []);
-  const [visits, setVisits] = usePersistedCollection("visits", []);
-  const [currentEmployee, setCurrentEmployee] = useState(null);
+const SESSION_KEY = "fvt-staff-session"; // stores just the employee id
 
-  const [staffTab, setStaffTab] = useState("dashboard"); // dashboard | history | wizard
+export default function App() {
+  const [theme, toggleTheme] = useTheme();
+  const [employees, setEmployees, employeesLoaded] = usePersistedCollection("employees", []);
+  const [visits, setVisits] = usePersistedCollection("visits", []);
+
+  // The session only remembers *which* employee is signed in (their id) —
+  // the actual employee record always comes fresh from the "employees"
+  // collection, so admin edits (role changes, etc.) are reflected without
+  // needing to log out and back in.
+  const [sessionEmployeeId, setSessionEmployeeId] = useState(() => {
+    try { return localStorage.getItem(SESSION_KEY); } catch { return null; }
+  });
+  const currentEmployee = employees.find((e) => e.id === sessionEmployeeId) || null;
+
+  const [staffTab, setStaffTab] = useState("dashboard"); // dashboard | history | wizard | myComplaints | fixerQueue
   const [activeVisitId, setActiveVisitId] = useState(null);
   const [wizardStartStep, setWizardStartStep] = useState(null);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
+  const persistSession = (id) => {
+    setSessionEmployeeId(id);
+    try {
+      if (id) localStorage.setItem(SESSION_KEY, id);
+      else localStorage.removeItem(SESSION_KEY);
+    } catch { /* private browsing etc. — session just won't survive a reload */ }
+  };
+
   const handleRegister = (newEmployee) => {
     setEmployees(es => [...es, newEmployee]);
-    setCurrentEmployee(newEmployee);
+    persistSession(newEmployee.id);
     showToast(`Welcome, ${newEmployee.name}!`);
   };
 
   const handleLogin = (employee) => {
-    setCurrentEmployee(employee);
+    persistSession(employee.id);
     showToast(`Welcome back, ${employee.name}!`);
   };
 
   const handleLogout = () => {
-    setCurrentEmployee(null);
+    persistSession(null);
     setStaffTab("dashboard");
     setActiveVisitId(null);
   };
+
+  // A saved session id exists but the employees collection hasn't loaded
+  // from the server yet — show a brief loading state instead of flashing
+  // the login screen and then swapping to the dashboard a moment later.
+  if (sessionEmployeeId && !employeesLoaded) {
+    return (
+      <div className="fvt">
+        <style>{STYLES}</style>
+        <div className="session-loading">
+          <div className="nav-logo"><MapPin size={18} color="#fff" /></div>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentEmployee) {
     return (
       <div className="fvt">
         <style>{STYLES}</style>
-        <AuthScreen employees={employees} onRegister={handleRegister} onLogin={handleLogin} />
+        <div style={{ position: "fixed", top: 16, right: 18 }}>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </div>
+        <AuthScreen
+          employees={employees}
+          onRegister={handleRegister}
+          onLogin={handleLogin}
+          icon={<MapPin size={20} color="#fff" />}
+          title="Field Visit Tracker"
+          subtitle="BRAC Microfinance Programme · Technology Unit"
+          demoHint="Demo: PIN 1234 + password password123 (or email ayaz.elahi@brac.org)"
+        />
+        <a className="admin-login-link" href="/admin.html">Login as admin</a>
         {toast && <div className="toast"><Check size={15} /> {toast}</div>}
       </div>
     );
@@ -571,8 +664,17 @@ export default function App() {
           <button className={`nav-tab ${staffTab === "dashboard" ? "active" : ""}`} onClick={() => setStaffTab("dashboard")}>
             <Home size={14} /> Dashboard
           </button>
+          <button className={`nav-tab ${staffTab === "myComplaints" ? "active" : ""}`} onClick={() => setStaffTab("myComplaints")}>
+            <MessageCircle size={14} /> My Complaints
+          </button>
+          {(currentEmployee.roles || []).includes("fixer") && (
+            <button className={`nav-tab ${staffTab === "fixerQueue" ? "active" : ""}`} onClick={() => setStaffTab("fixerQueue")}>
+              <Wrench size={14} /> Fixer Queue
+            </button>
+          )}
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
           <div className="avatar" title={currentEmployee.name}>{initials(currentEmployee.name)}</div>
           <button className="logout-btn" title="Sign out" onClick={handleLogout}><LogOut size={16} /></button>
         </div>
@@ -592,6 +694,14 @@ export default function App() {
 
       {staffTab === "history" && (
         <VisitHistory visits={myVisits} onResume={resumeVisit} onNew={openNewVisit} />
+      )}
+
+      {staffTab === "myComplaints" && (
+        <MyComplaints currentEmployee={currentEmployee} visits={visits} />
+      )}
+
+      {staffTab === "fixerQueue" && (currentEmployee.roles || []).includes("fixer") && (
+        <FixerQueue me={currentEmployee} visits={visits} setVisits={setVisits} showToast={showToast} />
       )}
 
       {staffTab === "wizard" && activeVisit && (
@@ -764,8 +874,12 @@ function StaffDashboard({ currentEmployee, visits, myVisits, onNew, onResume, on
         <div className="feed-grid">
           {allStories.map((s, i) => (
             <div className="story-card" key={s.visitId || i}>
-              <div className="story-photo" style={{ background: s.gradient || photoGradients[i % photoGradients.length] }}>
-                <Camera size={28} color="rgba(255,255,255,0.85)" />
+              <div className="story-photo" style={s.photoUrl ? undefined : { background: s.gradient || photoGradients[i % photoGradients.length] }}>
+                {s.photoUrl ? (
+                  <img src={s.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <Camera size={28} color="rgba(255,255,255,0.85)" />
+                )}
                 <div className="story-photo-tag"><MapPin size={11} /> {s.location}</div>
               </div>
               <div className="story-head">
@@ -812,6 +926,163 @@ function VisitHistory({ visits, onResume, onNew }) {
         <div className="visit-grid">
           {sorted.map(v => <VisitCard key={v.id} v={v} onResume={onResume} />)}
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ============================== MY COMPLAINTS ============================== */
+// Read-only view: every complaint this signed-in employee has filed, across
+// all of their visits, with its current status. Filing/editing complaints
+// still only happens inside the visit wizard — this is just visibility.
+
+function MyComplaints({ currentEmployee, visits }) {
+  const myComplaints = visits
+    .flatMap(v => (v.complaints || [])
+      .filter(c => c.filedBy === currentEmployee.name)
+      .map(c => ({ ...c, visitId: v.id, visitLocation: v.location, visitDate: v.date })))
+    .sort((a, b) => (b.filedDate || "").localeCompare(a.filedDate || ""));
+
+  return (
+    <div className="page">
+      <div style={{ marginBottom: 22 }}>
+        <p className="h-eyebrow">Your submissions</p>
+        <h1 className="h-title">My Complaints</h1>
+        <p className="h-desc">{myComplaints.length} complaint(s) filed by you, and where each one stands.</p>
+      </div>
+
+      {myComplaints.length === 0 ? (
+        <div className="empty-note card card-pad">You haven't filed any complaints yet.</div>
+      ) : (
+        myComplaints.map(c => (
+          <div className="card card-pad" key={c.id} style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
+              <div>
+                <span className="mono" style={{ fontSize: 11, color: "var(--ink-faint)" }}>{c.id}</span>
+                <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2 }}>{c.description}</div>
+              </div>
+              <span className={`status-pill status-${c.status.replace(/\s/g, "")}`}>{c.status}</span>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 12, color: "var(--ink-soft)" }}>
+              <span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span>
+              <span className="source-badge">{c.department}</span>
+              <span>Filed {c.filedDate} · Visit: {c.visitLocation || c.visitId}</span>
+            </div>
+            {c.photoUrl && (
+              <img src={c.photoUrl} alt="" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 8, marginTop: 10 }} />
+            )}
+            {c.assignedTo && (
+              <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 8 }}>
+                Assigned to <strong>{c.assignedTo}</strong>
+                {c.deadline && <> · Deadline: {new Date(c.deadline).toLocaleString()}</>}
+              </div>
+            )}
+            {c.status === "Resolved" && c.resolvedAt && (
+              <div style={{ fontSize: 12, color: "var(--success)", marginTop: 6, fontWeight: 650 }}>
+                Resolved on {new Date(c.resolvedAt).toLocaleString()}
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/* ============================== FIXER QUEUE ============================== */
+// Visible only to employees tagged with the "fixer" role — since fixers are
+// "just like normal users" with an extra role, this lives as another tab in
+// the same app rather than a separate login/panel.
+
+function FixerQueue({ me, visits, setVisits, showToast }) {
+  const [busyId, setBusyId] = useState(null);
+
+  const myComplaints = visits
+    .flatMap(v => (v.complaints || []).map(c => ({ ...c, visitId: v.id, location: v.location, visitDate: v.date })))
+    .filter(c => c.assignedEmployeeId === me.id)
+    .sort((a, b) => new Date(b.deadlineSetAt || 0) - new Date(a.deadlineSetAt || 0));
+
+  const assignedCount = myComplaints.length;
+  const fixedCount = myComplaints.filter(c => c.status === "Resolved").length;
+
+  const handleResolve = async (c) => {
+    setBusyId(c.id);
+    try {
+      await postAction("resolve-complaint", { visitId: c.visitId, complaintId: c.id, employeeId: me.id });
+      await refetchCollection("visits", setVisits);
+      showToast(`Marked ${c.id} as resolved.`);
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="page">
+      <div style={{ marginBottom: 22 }}>
+        <p className="h-eyebrow">Fixer Queue</p>
+        <h1 className="h-title">Assigned to you</h1>
+        <p className="h-desc">Everything assigned to you as a fixer, its timeline, and whether it's been dealt with.</p>
+      </div>
+
+      <div className="score-row">
+        <div className="score-card"><div className="score-num">{assignedCount}</div><div className="score-label">Assigned</div></div>
+        <div className="score-card"><div className="score-num" style={{ color: "var(--success)" }}>{fixedCount}</div><div className="score-label">Fixed</div></div>
+        <div className="score-card"><div className="score-num" style={{ color: "var(--magenta)" }}>{assignedCount - fixedCount}</div><div className="score-label">Still Open</div></div>
+      </div>
+
+      {myComplaints.length === 0 ? (
+        <div className="card empty-note card-pad">Nothing assigned to you yet.</div>
+      ) : (
+        myComplaints.map((c) => (
+          <div className="card complaint-card" key={c.id} style={{ marginBottom: 12, padding: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
+              <div>
+                <span className="mono" style={{ fontSize: 11, color: "var(--ink-faint)" }}>{c.id}</span>
+                <div style={{ fontWeight: 700, fontSize: 14, marginTop: 2 }}>{c.description}</div>
+              </div>
+              <span className={`status-pill status-${c.status.replace(/\s/g, "")}`}>{c.status}</span>
+            </div>
+
+            {c.photoUrl && (
+              <img src={c.photoUrl} alt="" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 8, marginBottom: 8 }} />
+            )}
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>
+              <span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span>
+              <span>Visit: {c.location} · {c.visitDate}</span>
+            </div>
+
+            {c.deadline && (
+              <div style={{ fontSize: 11.5, fontWeight: 700, display: "flex", alignItems: "center", gap: 5, color: c.escalated ? "var(--danger)" : "var(--ink-soft)" }}>
+                <Clock size={13} /> Deadline: {new Date(c.deadline).toLocaleString()}
+                {c.escalated && c.status !== "Resolved" && " — ESCALATED"}
+              </div>
+            )}
+
+            <div className="timeline" style={{ marginTop: 12, borderTop: "1px solid var(--line-soft)", paddingTop: 12 }}>
+              {(c.log || []).map((item, i) => (
+                <div className="tl-item" key={i}>
+                  <div className="tl-dot-wrap">
+                    <div className="tl-dot" />
+                    {i < c.log.length - 1 && <div className="tl-bar" />}
+                  </div>
+                  <div>
+                    <div className="tl-label">{item.label}</div>
+                    <div className="tl-time">{item.time}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {c.status !== "Resolved" && (
+              <button className="btn btn-primary" style={{ marginTop: 14 }} onClick={() => handleResolve(c)} disabled={busyId === c.id}>
+                <CheckCircle2 size={14} /> Mark Resolved
+              </button>
+            )}
+          </div>
+        ))
       )}
     </div>
   );
@@ -903,12 +1174,13 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
     department: "Construction",
     description: "",
     urgency: "Medium",
-    consent: null
+    consent: null,
+    photoUrl: null,
   });
   const [complaintsList, setComplaintsList] = useState(visit.complaints || []);
 
   const [caption, setCaption] = useState(visit.story?.caption || "");
-  const [photoAdded, setPhotoAdded] = useState(!!visit.story);
+  const [storyPhotoUrl, setStoryPhotoUrl] = useState(visit.story?.photoUrl || null);
 
   const makeToggleTag = (setter) => (t) => setter(ts => ts.includes(t) ? ts.filter(x => x !== t) : [...ts, t]);
   const toggleStaffTag = makeToggleTag(setStaffTags);
@@ -945,7 +1217,8 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
       department: "Construction",
       description: "",
       urgency: "Medium",
-      consent: null
+      consent: null,
+      photoUrl: null,
     });
   };
 
@@ -962,6 +1235,7 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
       description: c.description,
       urgency: c.urgency,
       consent: c.consent,
+      photoUrl: c.photoUrl ?? null,
       status: c.status || "Open",
       filedBy: visit.employeeName,
       visitId: visit.id,
@@ -981,7 +1255,11 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
   const saveStory = (skip) => {
     if (skip) { onExit(); return; }
     onUpdate({
-      story: { caption, posted: true, likes: visit.story?.likes || 0, comments: visit.story?.comments || 0, gradient: visit.story?.gradient || photoGradients[Math.floor(Math.random() * photoGradients.length)] },
+      story: {
+        caption, posted: true, likes: visit.story?.likes || 0, comments: visit.story?.comments || 0,
+        photoUrl: storyPhotoUrl || null,
+        gradient: storyPhotoUrl ? null : (visit.story?.gradient || photoGradients[Math.floor(Math.random() * photoGradients.length)]),
+      },
       steps: { ...visit.steps, story: true },
     });
     setFinished(true);
@@ -1219,15 +1497,20 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
                 <>
                   {complaintsList.map((c, i) => (
                     <div className="complaint-mini" key={c.id || i}>
-                      <div>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                          <span className="source-badge">{c.source}</span>
-                          <strong style={{ fontSize:13 }}>{c.department}</strong>
-                          <span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span>
-                        </div>
-                        <div style={{ fontSize:12.5, color:"var(--ink-soft)" }}>{c.description}</div>
-                        <div style={{ fontSize:11, color:"var(--ink-faint)", marginTop:4 }}>
-                          Consent to follow up: {c.consent ? "Yes" : "No"}
+                      <div style={{ display: "flex", gap: 10 }}>
+                        {c.photoUrl && (
+                          <img src={c.photoUrl} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                        )}
+                        <div>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                            <span className="source-badge">{c.source}</span>
+                            <strong style={{ fontSize:13 }}>{c.department}</strong>
+                            <span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span>
+                          </div>
+                          <div style={{ fontSize:12.5, color:"var(--ink-soft)" }}>{c.description}</div>
+                          <div style={{ fontSize:11, color:"var(--ink-faint)", marginTop:4 }}>
+                            Consent to follow up: {c.consent ? "Yes" : "No"}
+                          </div>
                         </div>
                       </div>
                       <button className="btn btn-ghost btn-sm" onClick={() => setComplaintsList(l => l.filter((_, idx) => idx !== i))}>
@@ -1276,6 +1559,10 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
                         <button className={complaintDraft.consent === false ? "active-no" : ""} onClick={() => setComplaintDraft(d => ({ ...d, consent:false }))}>No</button>
                       </div>
                     </div>
+                    <div className="field-group" style={{ marginBottom:14 }}>
+                      <label className="field-label">Photo (optional)</label>
+                      <PhotoUploadBox photoUrl={complaintDraft.photoUrl} onChange={(url) => setComplaintDraft(d => ({ ...d, photoUrl: url }))} />
+                    </div>
                     <button className="btn btn-secondary btn-sm" onClick={addComplaintToList}><Plus size={13} /> Add complaint</button>
                   </div>
                 </>
@@ -1287,11 +1574,7 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
             <>
               <div className="field-group">
                 <label className="field-label">Photo</label>
-                <div className="upload-box" onClick={() => setPhotoAdded(true)}>
-                  <Camera size={26} style={{ marginBottom:8 }} />
-                  <div style={{ fontWeight:650, fontSize:13, color:"var(--ink)" }}>{photoAdded ? "Photo attached ✓" : "Tap to add a photo"}</div>
-                  <div style={{ fontSize:11.5, marginTop:2 }}>JPG or PNG, up to 10MB</div>
-                </div>
+                <PhotoUploadBox photoUrl={storyPhotoUrl} onChange={setStoryPhotoUrl} hint="JPG or PNG" />
               </div>
               <div className="field-group">
                 <label className="field-label">Caption / story</label>

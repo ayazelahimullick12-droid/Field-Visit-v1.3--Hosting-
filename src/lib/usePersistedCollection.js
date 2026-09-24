@@ -22,6 +22,7 @@ const API_BASE = "/api";
  */
 export function usePersistedCollection(name, fallback) {
   const [data, setData] = useState(fallback);
+  const [loaded, setLoaded] = useState(false);
   const hasLoaded = useRef(false);
 
   useEffect(() => {
@@ -32,6 +33,7 @@ export function usePersistedCollection(name, fallback) {
         if (!cancelled) {
           setData(json);
           hasLoaded.current = true;
+          setLoaded(true);
         }
       })
       .catch((err) => {
@@ -39,6 +41,7 @@ export function usePersistedCollection(name, fallback) {
           `[usePersistedCollection] Could not load "${name}" from the server — using local seed data. Is the API server running (npm run dev:server)?`,
           err
         );
+        if (!cancelled) setLoaded(true); // don't block callers forever if the server is down
       });
     return () => {
       cancelled = true;
@@ -63,5 +66,5 @@ export function usePersistedCollection(name, fallback) {
     [name]
   );
 
-  return [data, setAndPersist];
+  return [data, setAndPersist, loaded];
 }

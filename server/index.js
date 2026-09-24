@@ -3,6 +3,7 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { assignComplaint, extendDeadline, resolveComplaint, runDeadlineCheck } from "./logic.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, "db.json");
@@ -54,6 +55,55 @@ app.put("/api/:collection", (req, res) => {
   }
 });
 
+// --- Complaint workflow actions -------------------------------------------
+// These are the only endpoints with real business logic; everything else is
+// the generic collection GET/PUT above. Each one reads the whole db, mutates
+// it via server/logic.js, writes it back, and returns what changed.
+
+app.post("/api/actions/assign-complaint", (req, res) => {
+  try {
+    const db = readDb();
+    const { complaint, email } = assignComplaint(db, req.body);
+    writeDb(db);
+    res.json({ complaint, email });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/api/actions/extend-deadline", (req, res) => {
+  try {
+    const db = readDb();
+    const { complaint, email } = extendDeadline(db, req.body);
+    writeDb(db);
+    res.json({ complaint, email });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/api/actions/resolve-complaint", (req, res) => {
+  try {
+    const db = readDb();
+    const { complaint } = resolveComplaint(db, req.body);
+    writeDb(db);
+    res.json({ complaint });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post("/api/actions/run-deadline-check", (req, res) => {
+  try {
+    const db = readDb();
+    const generated = runDeadlineCheck(db);
+    writeDb(db);
+    res.json({ emailsGenerated: generated.length, emails: generated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- Serve the built frontend (Vite's multi-page output) ---
 // This must come AFTER the /api routes above, so API calls are never
 // swallowed by the static file handler.
@@ -76,3 +126,22 @@ app.listen(PORT, () => {
   console.log(`Reading/writing: ${DB_PATH}`);
   console.log(`Serving frontend from: ${DIST_PATH}`);
 });
+
+// Automatic reminder/escalation sweep. Runs every 5 minutes while the
+// service is awake. On free-tier hosts (e.g. Render's free plan) the
+// service can sleep after inactivity, in which case this simply won't run
+// until something wakes it back up — use the "Run deadline check now"
+// button in the admin console to trigger it on demand for a demo.
+const DEADLINE_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+setInterval(() => {
+  try {
+    const db = readDb();
+    const generated = runDeadlineCheck(db);
+    if (generated.length > 0) {
+      writeDb(db);
+      console.log(`[deadline-check] generated ${generated.length} email(s)`);
+    }
+  } catch (err) {
+    console.error("[deadline-check] failed:", err);
+  }
+}, DEADLINE_CHECK_INTERVAL_MS);
