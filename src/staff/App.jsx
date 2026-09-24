@@ -1,15 +1,15 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
-  MapPin, Calendar, Clock, ChevronRight, ChevronLeft, Plus, X, Check,
+  MapPin, Calendar, Clock, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Plus, X, Check,
   Camera, Star, Heart, MessageCircle, Share2, ArrowLeft, CheckCircle2,
-  Send, Timer, Building2, Home, Mail, Lock, LogIn, ShieldCheck,
-  User, Phone, UserPlus, LogOut, Wrench
+  Send, Timer, Building2, Home,
+  LogOut, Wrench
 } from "lucide-react";
 import { usePersistedCollection } from "../lib/usePersistedCollection";
 import { makeId } from "../lib/ids";
 import { useTheme } from "../lib/theme";
 import ThemeToggle from "../lib/ThemeToggle";
-import AuthScreen from "../lib/AuthScreen";
+import Analytics from "./Analytics";
 
 /* =========================================================================
    DESIGN TOKENS & STYLES
@@ -26,7 +26,7 @@ const STYLES = `
     --ink-faint:#8B8D97;
     --line:#E7E7EC;
     --line-soft:#F0F0F4;
-    --paper:#FAFAFB;
+    --paper:#F1F1F5;
     --card:#FFFFFF;
     --success:#1C8A54;
     --success-wash:#E7F6EE;
@@ -39,8 +39,8 @@ const STYLES = `
     --radius-lg:14px;
     --radius-md:10px;
     --radius-sm:7px;
-    --shadow-card: 0 1px 2px rgba(29,30,34,0.04), 0 4px 14px rgba(29,30,34,0.05);
-    --shadow-pop: 0 12px 32px rgba(29,30,34,0.16);
+    --shadow-card: 0 1px 2px rgba(29,30,34,0.05), 0 1px 4px rgba(29,30,34,0.06);
+    --shadow-pop: 0 12px 28px rgba(29,30,34,0.18);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   [data-theme="dark"]{
@@ -347,30 +347,96 @@ async function refetchCollection(name, setter) {
    feedback, complaints, stories) is persisted via usePersistedCollection below.
    ----------------------------------------------------------------------------------- */
 
+// Second level here is the district (real Bangladesh administrative unit —
+// see src/staff/Analytics.jsx's DISTRICTS_BY_DIVISION for the full 64,
+// grouped by division, used to zoom the analytics map). Area/branch below
+// that stay app-specific — there's no public boundary data at that level.
 const LOCATIONS = {
   "Dhaka Division": {
-    "Dhaka Region": {
+    "Dhaka": {
       "Dhaka Metro Area": ["Dhanmondi Branch", "Mirpur Branch", "Uttara Branch"],
-      "Narayanganj Area": ["Narayanganj Branch", "Savar Branch"],
+      "Gulshan Area": ["Gulshan Branch", "Banani Branch"],
+      "Savar Area": ["Savar Branch", "Ashulia Branch"],
     },
-    "Gazipur Region": {
-      "Gazipur Area": ["Gazipur Branch"],
-      "Tongi Area": ["Tongi Branch"],
+    "Narayanganj": {
+      "Narayanganj Area": ["Narayanganj Branch", "Siddirganj Branch"],
+      "Sonargaon Area": ["Sonargaon Branch"],
+    },
+    "Gazipur": {
+      "Gazipur Area": ["Gazipur Branch", "Konabari Branch"],
+      "Tongi Area": ["Tongi Branch", "Kaliakair Branch"],
+    },
+    "Tangail": {
+      "Tangail Area": ["Tangail Branch", "Mirzapur Branch"],
+      "Sakhipur Area": ["Sakhipur Branch"],
     },
   },
   "Chattogram Division": {
-    "Chattogram Region": {
+    "Comilla": {
+      "Comilla Area": ["Comilla Branch", "Debidwar Branch"],
+      "Chandina Area": ["Chandina Branch"],
+    },
+    "Chattogram": {
       "Chattogram Metro Area": ["Chattogram Branch", "Pahartali Branch"],
+      "Patiya Area": ["Patiya Branch"],
+    },
+    "Cox's Bazar": {
+      "Cox's Bazar Area": ["Cox's Bazar Branch", "Teknaf Branch"],
+    },
+  },
+  "Sylhet Division": {
+    "Sylhet": {
+      "Sylhet Area": ["Sylhet Branch", "Zindabazar Branch"],
+      "Beanibazar Area": ["Beanibazar Branch"],
+    },
+    "Maulvibazar": {
+      "Maulvibazar Area": ["Maulvibazar Branch", "Sreemangal Branch"],
+    },
+  },
+  "Rajshahi Division": {
+    "Rajshahi": {
+      "Rajshahi Area": ["Rajshahi Branch", "Boalia Branch"],
+      "Puthia Area": ["Puthia Branch"],
+    },
+    "Bogra": {
+      "Bogra Area": ["Bogra Branch", "Sonatola Branch"],
+    },
+  },
+  "Khulna Division": {
+    "Khulna": {
+      "Khulna Area": ["Khulna Branch", "Sonadanga Branch"],
+      "Khalishpur Area": ["Khalishpur Branch"],
+    },
+    "Jessore": {
+      "Jessore Area": ["Jessore Branch", "Jhikargacha Branch"],
+    },
+  },
+  "Barisal Division": {
+    "Barisal": {
+      "Barisal Area": ["Barisal Branch", "Barisal Sadar Branch"],
+      "Bakerganj Area": ["Bakerganj Branch"],
+    },
+  },
+  "Rangpur Division": {
+    "Rangpur": {
+      "Rangpur Area": ["Rangpur Branch", "Rangpur City Branch"],
+      "Mithapukur Area": ["Mithapukur Branch"],
+    },
+  },
+  "Mymensingh Division": {
+    "Mymensingh": {
+      "Mymensingh Area": ["Mymensingh Branch", "Mymensingh Sadar Branch"],
+      "Trishal Area": ["Trishal Branch"],
     },
   },
 };
 
-const ALL_REGIONS = Object.values(LOCATIONS).flatMap(regions => Object.keys(regions));
-const ALL_AREAS = Object.values(LOCATIONS).flatMap(regions =>
-  Object.values(regions).flatMap(areas => Object.keys(areas))
+const ALL_DISTRICTS = Object.values(LOCATIONS).flatMap(districts => Object.keys(districts));
+const ALL_AREAS = Object.values(LOCATIONS).flatMap(districts =>
+  Object.values(districts).flatMap(areas => Object.keys(areas))
 );
 const areaOfficeName = (area) => `${area} Office`;
-const regionalOfficeName = (region) => `${region} Office`;
+const districtOfficeName = (district) => `${district} District Office`;
 
 const VILLAGE_ORGS = [
   "VO-104 · Dhanmondi Branch", "VO-118 · Dhanmondi Branch",
@@ -529,8 +595,9 @@ const SESSION_KEY = "fvt-staff-session"; // stores just the employee id
 
 export default function App() {
   const [theme, toggleTheme] = useTheme();
-  const [employees, setEmployees, employeesLoaded] = usePersistedCollection("employees", []);
+  const [employees, , employeesLoaded] = usePersistedCollection("employees", []);
   const [visits, setVisits] = usePersistedCollection("visits", []);
+  const [departments] = usePersistedCollection("departments", []);
 
   // The session only remembers *which* employee is signed in (their id) —
   // the actual employee record always comes fresh from the "employees"
@@ -541,7 +608,7 @@ export default function App() {
   });
   const currentEmployee = employees.find((e) => e.id === sessionEmployeeId) || null;
 
-  const [staffTab, setStaffTab] = useState("dashboard"); // dashboard | history | wizard | myComplaints | fixerQueue
+  const [staffTab, setStaffTab] = useState("dashboard"); // dashboard | history | wizard | myComplaints | fixerQueue | analytics
   const [activeVisitId, setActiveVisitId] = useState(null);
   const [wizardStartStep, setWizardStartStep] = useState(null);
   const [toast, setToast] = useState(null);
@@ -556,55 +623,32 @@ export default function App() {
     } catch { /* private browsing etc. — session just won't survive a reload */ }
   };
 
-  const handleRegister = (newEmployee) => {
-    setEmployees(es => [...es, newEmployee]);
-    persistSession(newEmployee.id);
-    showToast(`Welcome, ${newEmployee.name}!`);
-  };
-
-  const handleLogin = (employee) => {
-    persistSession(employee.id);
-    showToast(`Welcome back, ${employee.name}!`);
-  };
-
   const handleLogout = () => {
     persistSession(null);
     setStaffTab("dashboard");
     setActiveVisitId(null);
+    window.location.href = "/";
   };
 
-  // A saved session id exists but the employees collection hasn't loaded
-  // from the server yet — show a brief loading state instead of flashing
-  // the login screen and then swapping to the dashboard a moment later.
-  if (sessionEmployeeId && !employeesLoaded) {
+  // Sign-in/registration now lives on the unified landing page ("/"). If
+  // there's no valid session here (never logged in, or a stale/deleted
+  // employee id), bounce back there instead of showing a login form.
+  useEffect(() => {
+    if (!employeesLoaded) return;
+    if (!currentEmployee) {
+      try { localStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+      window.location.replace("/");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeesLoaded, currentEmployee]);
+
+  if (!employeesLoaded || !currentEmployee) {
     return (
       <div className="fvt">
         <style>{STYLES}</style>
         <div className="session-loading">
           <div className="nav-logo"><MapPin size={18} color="#fff" /></div>
         </div>
-      </div>
-    );
-  }
-
-  if (!currentEmployee) {
-    return (
-      <div className="fvt">
-        <style>{STYLES}</style>
-        <div style={{ position: "fixed", top: 16, right: 18 }}>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-        </div>
-        <AuthScreen
-          employees={employees}
-          onRegister={handleRegister}
-          onLogin={handleLogin}
-          icon={<MapPin size={20} color="#fff" />}
-          title="Field Visit Tracker"
-          subtitle="BRAC Microfinance Programme · Technology Unit"
-          demoHint="Demo: PIN 1234 + password password123 (or email ayaz.elahi@brac.org)"
-        />
-        <a className="admin-login-link" href="/admin.html">Login as admin</a>
-        {toast && <div className="toast"><Check size={15} /> {toast}</div>}
       </div>
     );
   }
@@ -685,6 +729,8 @@ export default function App() {
           currentEmployee={currentEmployee}
           visits={visits}
           myVisits={myVisits}
+          departments={departments}
+          theme={theme}
           onNew={openNewVisit}
           onResume={resumeVisit}
           onViewHistory={() => setStaffTab("history")}
@@ -772,7 +818,7 @@ function VisitCard({ v, onResume }) {
   );
 }
 
-function StaffDashboard({ currentEmployee, visits, myVisits, onNew, onResume, onViewHistory, setVisits }) {
+function StaffDashboard({ currentEmployee, visits, myVisits, departments, theme, onNew, onResume, onViewHistory, setVisits }) {
   // Every number here is derived live from the "visits" collection — nothing
   // is tracked separately, so it always matches what's actually stored.
   const myComplaints = myVisits.flatMap(v => v.complaints || []);
@@ -788,6 +834,12 @@ function StaffDashboard({ currentEmployee, visits, myVisits, onNew, onResume, on
   const myStoriesCount = allStories.filter(s => s.employeeId === currentEmployee.id).length;
 
   const latestVisits = [...myVisits].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 3);
+
+  const [overviewExpanded, setOverviewExpanded] = useState(false);
+  const [storiesExpanded, setStoriesExpanded] = useState(false);
+  const isManagement = (currentEmployee.roles || []).includes("management");
+  const STORY_PREVIEW_COUNT = 4;
+  const visibleStories = storiesExpanded ? allStories : allStories.slice(0, STORY_PREVIEW_COUNT);
 
   const toggleLike = (visitId) => {
     setVisits(vs => vs.map(v => v.id === visitId
@@ -806,7 +858,12 @@ function StaffDashboard({ currentEmployee, visits, myVisits, onNew, onResume, on
         <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> Register new visit</button>
       </div>
 
-      <p className="h-eyebrow" style={{ marginBottom: 16 }}>Your overview</p>
+      <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom: 16 }}>
+        <p className="h-eyebrow" style={{ marginBottom:0 }}>Your overview</p>
+        <button className="btn btn-ghost btn-sm" onClick={() => setOverviewExpanded(e => !e)}>
+          {overviewExpanded ? <>Show less <ChevronUp size={13} /></> : <>Show more <ChevronDown size={13} /></>}
+        </button>
+      </div>
 
       <div className="stat-section">
         <div className="stat-section-heading">Visit Statistics</div>
@@ -822,33 +879,37 @@ function StaffDashboard({ currentEmployee, visits, myVisits, onNew, onResume, on
         </div>
       </div>
 
-      <div className="stat-section">
-        <div className="stat-section-heading">Activity Statistics</div>
-        <div className="stat-row-group">
-          <div className="stat-card">
-            <div className="stat-num">{feedbacksLogged}</div>
-            <div className="stat-label">Feedbacks Logged</div>
+      {overviewExpanded && (
+        <>
+          <div className="stat-section">
+            <div className="stat-section-heading">Activity Statistics</div>
+            <div className="stat-row-group">
+              <div className="stat-card">
+                <div className="stat-num">{feedbacksLogged}</div>
+                <div className="stat-label">Feedbacks Logged</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-num">{myStoriesCount}</div>
+                <div className="stat-label">Stories Shared</div>
+              </div>
+            </div>
           </div>
-          <div className="stat-card">
-            <div className="stat-num">{myStoriesCount}</div>
-            <div className="stat-label">Stories Shared</div>
-          </div>
-        </div>
-      </div>
 
-      <div className="stat-section">
-        <div className="stat-section-heading">Complaint Statistics</div>
-        <div className="stat-row-group">
-          <div className="stat-card">
-            <div className="stat-num">{openComplaints}</div>
-            <div className="stat-label">Open Complaints</div>
+          <div className="stat-section">
+            <div className="stat-section-heading">Complaint Statistics</div>
+            <div className="stat-row-group">
+              <div className="stat-card">
+                <div className="stat-num">{openComplaints}</div>
+                <div className="stat-label">Open Complaints</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-num">{resolvedComplaints}</div>
+                <div className="stat-label">Resolved Complaints</div>
+              </div>
+            </div>
           </div>
-          <div className="stat-card">
-            <div className="stat-num">{resolvedComplaints}</div>
-            <div className="stat-label">Resolved Complaints</div>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
 
       <div style={{ marginTop: 24, marginBottom:12, display:"flex", alignItems:"baseline", justifyContent:"space-between" }}>
         <p className="h-eyebrow" style={{ marginBottom:0 }}>Your visits</p>
@@ -864,15 +925,22 @@ function StaffDashboard({ currentEmployee, visits, myVisits, onNew, onResume, on
         </div>
       )}
 
+      {isManagement && <Analytics visits={visits} departments={departments} theme={theme} />}
+
       <div style={{ marginTop:34, marginBottom:12, display:"flex", alignItems:"baseline", justifyContent:"space-between" }}>
         <p className="h-eyebrow" style={{ marginBottom:0 }}>Story feed</p>
+        {allStories.length > STORY_PREVIEW_COUNT && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setStoriesExpanded(e => !e)}>
+            {storiesExpanded ? <>Show less <ChevronUp size={13} /></> : <>Show more <ChevronDown size={13} /></>}
+          </button>
+        )}
       </div>
 
       {allStories.length === 0 ? (
         <div className="empty-note card card-pad">No stories posted yet.</div>
       ) : (
         <div className="feed-grid">
-          {allStories.map((s, i) => (
+          {visibleStories.map((s, i) => (
             <div className="story-card" key={s.visitId || i}>
               <div className="story-photo" style={s.photoUrl ? undefined : { background: s.gradient || photoGradients[i % photoGradients.length] }}>
                 {s.photoUrl ? (
@@ -1099,7 +1167,7 @@ function OfficeModal({ onClose, onSelect }) {
   const changeType = (t) => { setOfficeType(t); setChoice(""); };
 
   const options = officeType === "area" ? ALL_AREAS.map(areaOfficeName)
-    : officeType === "regional" ? ALL_REGIONS.map(regionalOfficeName)
+    : officeType === "regional" ? ALL_DISTRICTS.map(districtOfficeName)
     : VILLAGE_ORGS;
 
   return (
@@ -1116,7 +1184,7 @@ function OfficeModal({ onClose, onSelect }) {
             <label className="field-label">Office type</label>
             <div className="seg">
               <button className={`seg-btn ${officeType === "area" ? "active" : ""}`} onClick={() => changeType("area")}>Area Office</button>
-              <button className={`seg-btn ${officeType === "regional" ? "active" : ""}`} onClick={() => changeType("regional")}>Regional Office</button>
+              <button className={`seg-btn ${officeType === "regional" ? "active" : ""}`} onClick={() => changeType("regional")}>District Office</button>
               <button className={`seg-btn ${officeType === "vo" ? "active" : ""}`} onClick={() => changeType("vo")}>Village Org</button>
             </div>
           </div>
@@ -1327,9 +1395,9 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
                       </select>
                     </div>
                     <div className="field-group">
-                      <label className="field-label">Region</label>
+                      <label className="field-label">District</label>
                       <select className="select" value={region} disabled={!division} onChange={e => { setRegion(e.target.value); setArea(""); setLocation(""); }}>
-                        <option value="">Select region…</option>
+                        <option value="">Select district…</option>
                         {division && Object.keys(LOCATIONS[division]).map(r => <option key={r}>{r}</option>)}
                       </select>
                     </div>
@@ -1352,7 +1420,7 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
                   </div>
                   <div className="loc-office-row">
                     <button className="loc-office-btn" onClick={() => setShowOfficeModal(true)}>
-                      <Building2 size={13} /> Visiting an Area/Regional Office or Village Organisation instead?
+                      <Building2 size={13} /> Visiting an Area/District Office or Village Organisation instead?
                     </button>
                   </div>
                 </>

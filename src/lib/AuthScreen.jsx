@@ -15,9 +15,11 @@ import { makeId } from "./ids";
  * - requireRole: if set (e.g. "fixer"), only employees carrying that role
  *   may log in here, and new registrations are tagged with it
  * - demoHint: small footer text pointing at seeded demo credentials
+ * - footerExtra: optional extra content (e.g. an SSO button) rendered right
+ *   after the sign-in/register form, before the footer note
  */
 export default function AuthScreen({
-  employees, onRegister, onLogin, icon, title, subtitle, requireRole, demoHint,
+  employees, onRegister, onLogin, icon, title, subtitle, requireRole, demoHint, footerExtra,
 }) {
   const [mode, setMode] = useState("login"); // "login" | "register"
   const [loginMethod, setLoginMethod] = useState("pin"); // "pin" | "password"
@@ -228,6 +230,8 @@ export default function AuthScreen({
             </button>
           </>
         )}
+
+        {footerExtra}
 
         <p className="login-footer">
           Your account is stored in this app's database — it isn't shared outside this deployment.

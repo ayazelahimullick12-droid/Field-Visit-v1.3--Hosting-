@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   MapPin, X, Check, AlertTriangle, Search, ArrowLeft, CheckCircle2,
-  Users, TrendingUp, ShieldAlert, Building2, Mail, Lock, LogIn,
+  Users, TrendingUp, ShieldAlert, Building2,
   AlertCircle, CheckSquare, Hourglass, UserCheck, Plus, Trash2, Edit3,
   Inbox, RefreshCw, LogOut
 } from "lucide-react";
@@ -25,7 +25,7 @@ const STYLES = `
     --ink-faint:#8B8D97;
     --line:#E7E7EC;
     --line-soft:#F0F0F4;
-    --paper:#FAFAFB;
+    --paper:#F1F1F5;
     --card:#FFFFFF;
     --success:#1C8A54;
     --success-wash:#E7F6EE;
@@ -38,8 +38,8 @@ const STYLES = `
     --radius-lg:14px;
     --radius-md:10px;
     --radius-sm:7px;
-    --shadow-card: 0 1px 2px rgba(29,30,34,0.04), 0 4px 14px rgba(29,30,34,0.05);
-    --shadow-pop: 0 12px 32px rgba(29,30,34,0.16);
+    --shadow-card: 0 1px 2px rgba(29,30,34,0.05), 0 1px 4px rgba(29,30,34,0.06);
+    --shadow-pop: 0 12px 28px rgba(29,30,34,0.18);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
   [data-theme="dark"]{
@@ -234,32 +234,40 @@ const isOverdue = (c) => c.status === "In Progress" && c.deadline && new Date(c.
    MAIN APP
    ========================================================================= */
 
-const ADMIN_SESSION_KEY = "fvt-admin-session";
+const ADMIN_SESSION_KEY = "fvt-admin-session"; // stores the signed-in admin's email
 
 export default function App() {
   const [theme, toggleTheme] = useTheme();
-  const [session, setSession] = useState(() => {
-    try {
-      const saved = sessionStorage.getItem(ADMIN_SESSION_KEY);
-      return saved ? { email: saved } : null;
-    } catch { return null; }
+  const [adminUsers, , adminUsersLoaded] = usePersistedCollection("adminUsers", []);
+  const [sessionEmail] = useState(() => {
+    try { return sessionStorage.getItem(ADMIN_SESSION_KEY); } catch { return null; }
   });
-  const [adminAuth] = usePersistedCollection("adminAuth", { email: "admin@brac.org", password: "admin123" });
+  const currentAdmin = adminUsers.find((a) => a.email.toLowerCase() === (sessionEmail || "").toLowerCase()) || null;
 
-  const handleLogin = (email) => {
-    setSession({ email });
-    try { sessionStorage.setItem(ADMIN_SESSION_KEY, email); } catch { /* ignore */ }
-  };
   const handleLogout = () => {
-    setSession(null);
     try { sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch { /* ignore */ }
+    window.location.href = "/";
   };
 
-  if (!session) {
+  // Sign-in now lives on the unified landing page ("/"). No valid admin
+  // session here (never logged in, or an email that no longer matches an
+  // admin account) bounces back there instead of showing a login form.
+  useEffect(() => {
+    if (!adminUsersLoaded) return;
+    if (!currentAdmin) {
+      try { sessionStorage.removeItem(ADMIN_SESSION_KEY); } catch { /* ignore */ }
+      window.location.replace("/");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminUsersLoaded, currentAdmin]);
+
+  if (!adminUsersLoaded || !currentAdmin) {
     return (
       <div className="fvt">
         <style>{STYLES}</style>
-        <AdminLogin adminAuth={adminAuth} onLogin={handleLogin} />
+        <div className="login-screen">
+          <div className="login-logo"><ShieldAlert size={20} color="#fff" /></div>
+        </div>
       </div>
     );
   }
@@ -267,54 +275,7 @@ export default function App() {
   return (
     <div className="fvt">
       <style>{STYLES}</style>
-      <AdminShell theme={theme} toggleTheme={toggleTheme} onLogout={handleLogout} session={session} />
-    </div>
-  );
-}
-
-function AdminLogin({ adminAuth, onLogin }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-
-  const handleLogin = () => {
-    if (!email.trim() || !password.trim()) {
-      setError("Enter the admin email and password.");
-      return;
-    }
-    if (email.trim() !== adminAuth.email || password !== adminAuth.password) {
-      setError("Incorrect admin email or password.");
-      return;
-    }
-    onLogin(email.trim());
-  };
-
-  return (
-    <div className="login-screen">
-      <div className="login-card">
-        <div className="login-logo"><ShieldAlert size={20} color="#fff" /></div>
-        <h1 className="login-title">Admin Console</h1>
-        <p className="login-sub">Field Visit Tracker · BRAC Microfinance</p>
-
-        <div className="login-input-wrap">
-          <Mail size={15} className="login-input-icon" />
-          <input className="input login-input" type="email" placeholder="admin@brac.org"
-                 value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div className="login-input-wrap">
-          <Lock size={15} className="login-input-icon" />
-          <input className="input login-input" type="password" placeholder="Password"
-                 value={password} onChange={(e) => setPassword(e.target.value)}
-                 onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
-        </div>
-
-        {error && <div className="login-error">{error}</div>}
-
-        <button className="btn btn-primary btn-block" style={{ marginTop: 20 }} onClick={handleLogin}>
-          <LogIn size={15} /> Sign in
-        </button>
-        <p className="login-footer">Default demo credentials: admin@brac.org / admin123</p>
-      </div>
+      <AdminShell theme={theme} toggleTheme={toggleTheme} onLogout={handleLogout} currentAdmin={currentAdmin} />
     </div>
   );
 }
@@ -323,7 +284,16 @@ function AdminLogin({ adminAuth, onLogin }) {
    SHELL (tabs + top nav, shared across all admin pages)
    ========================================================================= */
 
-function AdminShell({ theme, toggleTheme, onLogout, session }) {
+function adminInitials(name) {
+  return (name || "AD")
+    .split(" ")
+    .map((p) => p[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
   const [tab, setTab] = useState("queue");
   const [toast, setToast] = useState(null);
   const showToast = (msg) => {
@@ -379,7 +349,7 @@ function AdminShell({ theme, toggleTheme, onLogout, session }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <div className="avatar">AD</div>
+          <div className="avatar" title={currentAdmin.name}>{adminInitials(currentAdmin.name)}</div>
           <button className="btn btn-ghost btn-sm" onClick={onLogout}><LogOut size={14} /> Log out</button>
         </div>
       </div>
@@ -794,7 +764,7 @@ function DepartmentsTab({ departments, setDepartments, showToast }) {
    TAB: EMPLOYEES
    ========================================================================= */
 
-const ROLE_OPTIONS = ["field", "fixer", "supervisor"];
+const ROLE_OPTIONS = ["field", "fixer", "supervisor", "management"];
 
 function EmployeesTab({ employees, setEmployees, departments, showToast }) {
   const [form, setForm] = useState(emptyEmployeeForm());
@@ -914,6 +884,7 @@ function EmployeesTab({ employees, setEmployees, departments, showToast }) {
             </div>
             <p style={{ fontSize: 11, color: "var(--ink-faint)", marginTop: 6 }}>
               Only one fixer per department — checking it here removes it from whoever had it.
+              "management" adds an Analytics dashboard to their staff app, on top of whatever else they can already do.
             </p>
           </div>
         </div>
