@@ -1,316 +1,23 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   MapPin, Calendar, Clock, ChevronRight, ChevronLeft, ChevronUp, ChevronDown, Plus, X, Check,
   Camera, Star, Heart, MessageCircle, Share2, ArrowLeft, CheckCircle2,
-  Send, Timer, Building2, Home,
-  LogOut, Wrench
+  Send, Timer, Building2, Home, Wrench, ClipboardList, Search, Radar,
 } from "lucide-react";
 import { usePersistedCollection } from "../lib/usePersistedCollection";
 import { makeId } from "../lib/ids";
 import { useTheme } from "../lib/theme";
-import ThemeToggle from "../lib/ThemeToggle";
+import AppShell from "../lib/AppShell";
+import CommandPalette from "../lib/CommandPalette";
+import { PersonFields, PersonDetails, emptyPerson, compactPerson, hasPerson } from "../lib/PersonInfo";
+import { FEATURES } from "../lib/features";
+import { TERMS, lower } from "../lib/terms";
+import BdOutline from "../lib/BdOutline";
+import { CountUp, Reveal, Sparkline, DeltaChip } from "../lib/ui";
+import { buildLocationTree, computeCoverage, monthBuckets, monthKeyOf, DEFAULT_SETTINGS, STATUS_META } from "../lib/offices";
 import Analytics from "./Analytics";
-
-/* =========================================================================
-   DESIGN TOKENS & STYLES
-   ========================================================================= */
-
-const STYLES = `
-  :root{
-    --magenta:#EC008C;
-    --magenta-dark:#B8006E;
-    --magenta-wash:#FDE9F4;
-    --magenta-wash-2:#FBD3E8;
-    --ink:#1D1E22;
-    --ink-soft:#5B5D68;
-    --ink-faint:#8B8D97;
-    --line:#E7E7EC;
-    --line-soft:#F0F0F4;
-    --paper:#F1F1F5;
-    --card:#FFFFFF;
-    --success:#1C8A54;
-    --success-wash:#E7F6EE;
-    --warning:#B7791F;
-    --warning-wash:#FBF1DF;
-    --danger:#D6394C;
-    --danger-wash:#FCE8EA;
-    --info:#2F6FED;
-    --info-wash:#EAF1FE;
-    --radius-lg:14px;
-    --radius-md:10px;
-    --radius-sm:7px;
-    --shadow-card: 0 1px 2px rgba(29,30,34,0.05), 0 1px 4px rgba(29,30,34,0.06);
-    --shadow-pop: 0 12px 28px rgba(29,30,34,0.18);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  }
-  [data-theme="dark"]{
-    --ink:#F2F2F5; --ink-soft:#B9BAC4; --ink-faint:#83848F;
-    --line:#33343C; --line-soft:#2A2B32; --paper:#141419; --card:#1D1E24;
-    --magenta-wash:#3A1530; --magenta-wash-2:#4A1B3D;
-    --success-wash:#123423; --warning-wash:#3A2D0F; --danger-wash:#3A1418; --info-wash:#122A44;
-    --shadow-card: 0 1px 2px rgba(0,0,0,0.35), 0 4px 14px rgba(0,0,0,0.4);
-    --shadow-pop: 0 12px 32px rgba(0,0,0,0.6);
-  }
-  .theme-toggle{ width:32px;height:32px;border-radius:999px;border:1px solid var(--line); background:var(--card);
-                 color:var(--ink-soft); display:flex;align-items:center;justify-content:center; cursor:pointer; flex-shrink:0; }
-  .theme-toggle:hover{ background:var(--line-soft); }
-  .admin-login-link{ position:fixed; bottom:16px; right:18px; font-size:11.5px; font-weight:650; color:var(--ink-faint);
-                      background:var(--card); border:1px solid var(--line); padding:7px 12px; border-radius:999px;
-                      text-decoration:none; box-shadow:var(--shadow-card); }
-  .admin-login-link:hover{ color:var(--magenta-dark); border-color:var(--magenta-wash-2); }
-  html, body{ margin:0; padding:0; background:var(--paper); }
-  #root{ min-height:100vh; background:var(--paper); }
-  .fvt{ background:var(--paper); color:var(--ink); min-height:100vh; font-family:'Inter',sans-serif; }
-
-  .login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center;
-                 background:linear-gradient(160deg, var(--paper) 0%, var(--magenta-wash) 130%); padding:24px; }
-  .login-card{ width:100%; max-width:380px; background:var(--card); border:1px solid var(--line);
-               border-radius:var(--radius-lg); box-shadow:var(--shadow-pop); padding:36px 30px 28px; text-align:center; }
-  .login-logo{ width:44px; height:44px; border-radius:12px; background:var(--magenta);
-               display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
-  .login-title{ font-size:19px; font-weight:750; margin:0; }
-  .login-sub{ font-size:12px; color:var(--ink-faint); margin:4px 0 0; }
-  .login-card .field-group{ text-align:left; margin-top:20px; margin-bottom:0; }
-  .login-card .field-group + .field-group{ margin-top:16px; }
-  .login-input-wrap{ position:relative; }
-  .login-input-icon{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-faint); pointer-events:none; }
-  .login-input.input{ padding-left:36px; }
-  .login-card .btn-block{ margin-top:24px; }
-  .login-divider{ display:flex; align-items:center; gap:10px; margin:18px 0; color:var(--ink-faint);
-                   font-size:11px; text-transform:uppercase; letter-spacing:0.05em; }
-  .login-divider::before, .login-divider::after{ content:""; flex:1; height:1px; background:var(--line); }
-  .login-footer{ font-size:11px; color:var(--ink-faint); margin:20px 0 0; }
-  .login-error{ background:var(--danger-wash); color:var(--danger); font-size:12px; font-weight:650; padding:9px 12px; border-radius:8px; margin-top:16px; text-align:left; }
-  .auth-tabs{ display:flex; background:var(--line-soft); border-radius:9px; padding:3px; gap:2px; margin-top:18px; }
-  .auth-tab{ flex:1; border:none; background:transparent; padding:8px; border-radius:7px; font-size:12.5px; font-weight:650; color:var(--ink-soft); cursor:pointer; }
-  .auth-tab.active{ background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-  .auth-subtabs{ display:flex; gap:16px; margin-top:16px; margin-bottom:4px; border-bottom:1px solid var(--line); }
-  .auth-subtab{ border:none; background:transparent; padding:0 0 9px; font-size:12.5px; font-weight:650; color:var(--ink-faint); cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; }
-  .auth-subtab.active{ color:var(--magenta-dark); border-bottom-color:var(--magenta); }
-  .fvt *{ box-sizing:border-box; }
-  .mono{ font-family:'IBM Plex Mono','SF Mono',monospace; letter-spacing:-0.01em; }
-
-  /* ---------- top nav ---------- */
-  .nav{ position:sticky; top:0; z-index:40; background:var(--card); border-bottom:1px solid var(--line);
-        display:flex; align-items:center; justify-content:space-between; padding:12px 20px; }
-  .nav-left{ display:flex; align-items:center; gap:10px; }
-  .nav-logo{ width:34px; height:34px; border-radius:9px; background:var(--magenta);
-             display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .nav-title{ font-weight:700; font-size:15px; letter-spacing:-0.01em; }
-  .nav-sub{ font-size:11px; color:var(--ink-faint); margin-top:-1px; }
-  .nav-tabs{ display:flex; align-items:center; gap:2px; }
-  .nav-tab{ display:flex; align-items:center; gap:6px; padding:7px 12px; border-radius:8px; font-size:13px;
-            font-weight:600; color:var(--ink-soft); cursor:pointer; border:none; background:transparent; }
-  .nav-tab.active{ background:var(--magenta-wash); color:var(--magenta-dark); }
-  .avatar{ width:30px; height:30px; border-radius:999px; background:var(--magenta-wash-2); color:var(--magenta-dark);
-           display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; flex-shrink:0; }
-  .logout-btn{ background:none; border:none; color:var(--ink-faint); cursor:pointer; display:flex; align-items:center; padding:6px; border-radius:8px; }
-  .logout-btn:hover{ color:var(--danger); background:var(--danger-wash); }
-
-  .page{ max-width:1080px; margin:0 auto; padding:28px 20px 60px; }
-  .page-narrow{ max-width:640px; margin:0 auto; padding:28px 20px 60px; }
-
-  h1.h-title{ font-size:22px; font-weight:750; letter-spacing:-0.02em; margin:0; }
-  .h-eyebrow{ font-size:11.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--magenta); margin:0 0 4px; }
-  .h-desc{ color:var(--ink-soft); font-size:13.5px; margin:4px 0 0; }
-
-  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; border:none; cursor:pointer;
-        font-weight:650; font-size:13.5px; border-radius:9px; padding:10px 16px; transition:transform .06s ease; }
-  .btn:active{ transform:scale(0.97); }
-  .btn-primary{ background:var(--magenta); color:#fff; }
-  .btn-primary:hover{ background:var(--magenta-dark); }
-  .btn-secondary{ background:var(--card); color:var(--ink); border:1px solid var(--line); }
-  .btn-secondary:hover{ background:var(--line-soft); }
-  .btn-ghost{ background:transparent; color:var(--ink-soft); }
-  .btn-ghost:hover{ color:var(--ink); }
-  .btn-sm{ padding:7px 12px; font-size:12.5px; border-radius:8px; }
-  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
-  .btn-block{ width:100%; }
-
-  .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow-card); }
-  .card-pad{ padding:18px; }
-
-  /* ---------- grouped stats ---------- */
-  .stat-section { margin-bottom: 28px; }
-  .stat-section-heading { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); margin-bottom: 10px; }
-  .stat-row-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-  .stat-card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px 16px; }
-  .stat-num{ font-size:22px; font-weight:750; letter-spacing:-0.02em; }
-  .stat-label{ font-size:11.5px; color:var(--ink-faint); font-weight:600; margin-top:2px; }
-
-  .visit-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  .visit-card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-lg); padding:16px;
-               cursor:pointer; box-shadow:var(--shadow-card); transition:border-color .1s ease; }
-  .visit-card:hover{ border-color:var(--magenta); }
-  .visit-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
-  .visit-loc{ font-weight:700; font-size:14.5px; display:flex; align-items:center; gap:6px; }
-  .visit-meta{ font-size:12px; color:var(--ink-soft); margin-top:3px; display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
-  .visit-id{ font-size:10.5px; color:var(--ink-faint); }
-  .visit-reason-tag{ font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:6px; background:var(--info-wash); color:var(--info); text-transform:uppercase; letter-spacing:0.02em; }
-
-  .route{ display:flex; align-items:center; gap:0; margin-top:14px; }
-  .route-step{ display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; position:relative; }
-  .route-dot{ width:20px; height:20px; border-radius:999px; display:flex; align-items:center; justify-content:center;
-              border:2px solid var(--line); background:var(--card); z-index:2; padding:0; cursor:pointer; }
-  .route-dot:hover{ border-color:var(--magenta); }
-  .route-dot.done{ background:var(--magenta); border-color:var(--magenta); }
-  .route-dot.current{ border-color:var(--magenta); background:var(--magenta-wash); }
-  .route-label{ font-size:9.5px; font-weight:700; color:var(--ink-faint); text-transform:uppercase; letter-spacing:0.03em; }
-  .route-label.done{ color:var(--magenta-dark); }
-  .route-line{ position:absolute; top:9px; left:-50%; width:100%; height:2px; background:var(--line); z-index:1; }
-  .route-step:first-child .route-line{ display:none; }
-
-  .empty-note{ text-align:center; padding:50px 20px; color:var(--ink-faint); }
-
-  /* ---------- wizard ---------- */
-  .wizard-shell{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow-card); overflow:hidden; }
-  .wizard-head{ padding:20px 24px 14px; border-bottom:1px solid var(--line-soft); }
-  .wizard-body{ padding:24px; }
-  .wizard-foot{ padding:16px 24px; border-top:1px solid var(--line-soft); display:flex; justify-content:space-between; align-items:center; }
-
-  .stepper{ display:flex; align-items:center; margin-top:16px; }
-  .step-node{ display:flex; flex-direction:column; align-items:center; flex:1; position:relative; }
-  .step-circle{ width:30px; height:30px; border-radius:999px; display:flex; align-items:center; justify-content:center;
-                background:var(--card); border:2px solid var(--line); font-size:12px; font-weight:700; color:var(--ink-faint); z-index:2; }
-  .step-circle.done{ background:var(--magenta); border-color:var(--magenta); color:#fff; }
-  .step-circle.current{ border-color:var(--magenta); color:var(--magenta); background:var(--magenta-wash); }
-  .step-name{ font-size:11px; font-weight:650; color:var(--ink-faint); margin-top:6px; }
-  .step-name.active{ color:var(--ink); }
-  .step-connector{ position:absolute; top:14px; left:-50%; width:100%; height:2px; background:var(--line); z-index:1;
-                    background-image: linear-gradient(to right, var(--line) 60%, transparent 0%); background-size:8px 2px; background-repeat:repeat-x; }
-  .step-connector.done{ background-image:none; background:var(--magenta); }
-  .step-node:first-child .step-connector{ display:none; }
-
-  .field-group{ margin-bottom:18px; }
-  .field-label{ font-size:12.5px; font-weight:650; color:var(--ink); margin-bottom:6px; display:block; }
-  .field-hint{ font-size:11.5px; color:var(--ink-faint); margin-top:4px; }
-  .input, .select, .textarea{ width:100%; border:1px solid var(--line); border-radius:99px; padding:10px 12px; font-size:13.5px;
-        font-family:inherit; background:var(--card); color:var(--ink); }
-  .input, .select { border-radius:9px; }
-  .input:focus, .select:focus, .textarea:focus{ outline:2px solid var(--magenta); outline-offset:1px; border-color:var(--magenta); }
-  .textarea{ resize:vertical; min-height:80px; border-radius:9px; }
-  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-
-  .duration-display{ display:flex; align-items:center; gap:8px; background:var(--paper); border:1px solid var(--line);
-                      border-radius:9px; padding:10px 12px; font-size:13px; font-weight:650; color:var(--ink-faint); }
-  .duration-display.filled{ background:var(--info-wash); border-color:transparent; color:var(--info); }
-  .duration-display.invalid{ background:var(--danger-wash); border-color:transparent; color:var(--danger); }
-
-  .loc-office-row{ display:flex; justify-content:flex-end; margin:-6px 0 20px; }
-  .loc-office-btn{ background:none; border:none; color:var(--magenta-dark); font-size:12px; font-weight:650;
-                    cursor:pointer; display:flex; align-items:center; gap:5px; padding:4px 0; text-align:right; }
-  .loc-office-btn:hover{ text-decoration:underline; }
-  .loc-office-summary{ display:flex; align-items:center; justify-content:space-between; background:var(--magenta-wash);
-                        border:1px solid var(--magenta-wash-2); border-radius:9px; padding:11px 14px; margin-bottom:18px; }
-  .loc-office-summary-text{ font-size:13px; font-weight:650; color:var(--magenta-dark); display:flex; align-items:center; gap:7px; }
-  .loc-office-clear{ background:none; border:1px solid var(--magenta-wash-2); border-radius:999px; width:24px; height:24px;
-                      color:var(--magenta-dark); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-
-  .seg{ display:inline-flex; background:var(--line-soft); border-radius:9px; padding:3px; gap:2px; }
-  .seg-btn{ border:none; background:transparent; padding:8px 14px; border-radius:7px; font-size:12.5px; font-weight:650; color:var(--ink-soft); cursor:pointer; }
-  .seg-btn.active{ background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-
-  .chip{ display:inline-flex; align-items:center; padding:8px 13px; border-radius:999px; border:1.5px solid var(--line);
-         font-size:12.5px; font-weight:600; cursor:pointer; color:var(--ink-soft); background:var(--card); margin:0 8px 8px 0; }
-  .chip.selected{ background:var(--magenta); border-color:var(--magenta); color:#fff; }
-
-  .stars{ display:flex; gap:5px; }
-  .star-btn{ background:none; border:none; cursor:pointer; padding:2px; }
-
-  .toggle-yn{ display:inline-flex; background:var(--line-soft); border-radius:9px; padding:3px; }
-  .toggle-yn button{ border:none; background:transparent; padding:8px 20px; border-radius:7px; font-size:13px; font-weight:650; cursor:pointer; color:var(--ink-soft); }
-  .toggle-yn button.active-yes{ background:var(--danger); color:#fff; }
-  .toggle-yn button.active-no{ background:var(--ink); color:#fff; }
-
-  .complaint-mini{ border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; background:var(--paper); }
-  .urgency-badge{ font-size:10px; font-weight:750; padding:3px 8px; border-radius:6px; text-transform:uppercase; letter-spacing:0.02em; }
-  .urgency-Low{ background:var(--success-wash); color:var(--success); }
-  .urgency-Medium{ background:var(--warning-wash); color:var(--warning); }
-  .urgency-High{ background:var(--danger-wash); color:var(--danger); }
-  .source-badge{ font-size:10px; font-weight:750; padding:3px 8px; border-radius:6px; text-transform:uppercase; background:var(--line-soft); color:var(--ink-soft); }
-  .status-pill{ font-size:10.5px; font-weight:750; padding:4px 9px; border-radius:999px; white-space:nowrap; }
-  .status-Open{ background:var(--danger-wash); color:var(--danger); }
-  .status-InProgress{ background:var(--info-wash); color:var(--info); }
-  .status-Resolved{ background:var(--success-wash); color:var(--success); }
-
-  .upload-box{ border:1.5px dashed var(--line); border-radius:12px; padding:34px 20px; text-align:center; color:var(--ink-faint);
-               cursor:pointer; background:var(--paper); }
-  .upload-box:hover{ border-color:var(--magenta); color:var(--magenta-dark); }
-
-  .confirm-wrap{ text-align:center; padding:40px 24px; }
-  .confirm-check{ width:56px; height:56px; border-radius:999px; background:var(--success-wash); color:var(--success);
-                   display:flex; align-items:center; justify-content:center; margin:0 auto 14px; }
-
-  /* ---------- story feed ---------- */
-  .feed-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
-  .story-card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-card); }
-  .story-photo{ height:280px; width:100%; display:flex; align-items:center; justify-content:center; position:relative; }
-  .story-photo-tag{ position:absolute; bottom:10px; left:12px; background:rgba(0,0,0,0.45); color:#fff; font-size:11px; font-weight:600; padding:4px 9px; border-radius:6px; display:flex; align-items:center; gap:5px; }
-  .story-head{ display:flex; align-items:center; gap:10px; padding:13px 14px 6px; }
-  .story-name{ font-weight:700; font-size:13.5px; }
-  .story-loc{ font-size:11.5px; color:var(--ink-faint); }
-  .story-cap{ padding:8px 14px 4px; font-size:13px; line-height:1.5; }
-  .story-actions{ display:flex; align-items:center; gap:16px; padding:8px 14px 14px; color:var(--ink-soft); }
-  .story-action{ display:flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600; background:none; border:none; cursor:pointer; color:var(--ink-soft); }
-  .story-action.liked{ color:var(--magenta); }
-
-  /* ---------- modal & toast ---------- */
-  .modal-veil{ position:fixed; inset:0; background:rgba(20,20,24,0.44); display:flex; align-items:flex-start; justify-content:center;
-               padding:40px 16px; z-index:100; overflow-y:auto; }
-  .modal-box{ background:var(--card); border-radius:16px; width:100%; max-width:620px; box-shadow:var(--shadow-pop); }
-  .modal-head{ padding:20px 22px; border-bottom:1px solid var(--line-soft); display:flex; justify-content:space-between; align-items:flex-start; }
-  .modal-body{ padding:22px; }
-  .modal-close{ background:var(--line-soft); border:none; width:28px; height:28px; border-radius:999px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-soft); flex-shrink:0; }
-
-  .toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff;
-          padding:12px 20px; border-radius:10px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px;
-          box-shadow:var(--shadow-pop); z-index:200; }
-  .session-loading{ min-height:100vh; display:flex; align-items:center; justify-content:center; }
-  .session-loading .nav-logo{ animation:fvt-pulse 1.1s ease-in-out infinite; }
-  @keyframes fvt-pulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:0.55; transform:scale(0.92); } }
-
-  .score-row{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:26px; }
-  .score-card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:16px; text-align:center; box-shadow:var(--shadow-card); }
-  .score-num{ font-size:24px; font-weight:800; letter-spacing:-0.02em; }
-  .score-label{ font-size:11.5px; color:var(--ink-faint); font-weight:600; margin-top:4px; }
-  .complaint-card{ background:var(--card); }
-  .timeline{ margin-top:6px; }
-  .tl-item{ display:flex; gap:12px; padding-bottom:12px; }
-  .tl-item:last-child{ padding-bottom:0; }
-  .tl-dot-wrap{ display:flex; flex-direction:column; align-items:center; }
-  .tl-dot{ width:8px; height:8px; border-radius:999px; background:var(--magenta); margin-top:4px; flex-shrink:0; }
-  .tl-bar{ width:2px; flex:1; background:var(--line); margin-top:2px; }
-  .tl-label{ font-size:12px; font-weight:700; }
-  .tl-time{ font-size:10.5px; color:var(--ink-faint); }
-
-  @media (max-width: 720px){
-    .visit-grid{ grid-template-columns:1fr; }
-    .field-row{ grid-template-columns:1fr; }
-    .feed-grid{ grid-template-columns:1fr; }
-    .page{ padding:16px 14px 90px; }
-    .nav{ padding:10px 14px; }
-    .nav-sub{ display:none; }
-    .nav-title{ font-size:14px; }
-    h1.h-title{ font-size:19px; }
-    .modal-veil{ padding:0; align-items:flex-end; }
-    .modal-box{ max-width:100%; width:100%; border-radius:16px 16px 0 0; max-height:92vh; overflow-y:auto; }
-    .login-card{ padding:28px 20px 22px; max-width:100%; }
-    .stat-row, .score-row{ grid-template-columns:repeat(2,1fr); }
-    .admin-login-link{ bottom:12px; right:12px; font-size:11px; padding:6px 10px; }
-  }
-  @media (max-width: 980px) and (min-width: 721px){
-    .feed-grid{ grid-template-columns:1fr 1fr; }
-  }
-
-  /* Elements with box-shadow, promoted to their own compositing layer — fixes
-     the well-known iOS Safari bug where shadow+radius elements flicker
-     (repaint) during scroll instead of staying put. */
-  .card, .login-card, .wizard-shell, .visit-card, .story-card, .modal-box,
-  .score-card, .admin-login-link{
-    -webkit-transform:translateZ(0); transform:translateZ(0);
-    -webkit-backface-visibility:hidden; backface-visibility:hidden;
-  }
-`;
+import NetworkHealth from "./NetworkHealth";
+import BranchProfile from "./BranchProfile";
 
 /* ------------------------------- API ACTION HELPERS -------------------------------
    Used only by the Fixer Queue tab (see FixerQueue below), which is the one part
@@ -347,96 +54,23 @@ async function refetchCollection(name, setter) {
    feedback, complaints, stories) is persisted via usePersistedCollection below.
    ----------------------------------------------------------------------------------- */
 
-// Second level here is the district (real Bangladesh administrative unit —
-// see src/staff/Analytics.jsx's DISTRICTS_BY_DIVISION for the full 64,
-// grouped by division, used to zoom the analytics map). Area/branch below
-// that stay app-specific — there's no public boundary data at that level.
-const LOCATIONS = {
-  "Dhaka Division": {
-    "Dhaka": {
-      "Dhaka Metro Area": ["Dhanmondi Branch", "Mirpur Branch", "Uttara Branch"],
-      "Gulshan Area": ["Gulshan Branch", "Banani Branch"],
-      "Savar Area": ["Savar Branch", "Ashulia Branch"],
-    },
-    "Narayanganj": {
-      "Narayanganj Area": ["Narayanganj Branch", "Siddirganj Branch"],
-      "Sonargaon Area": ["Sonargaon Branch"],
-    },
-    "Gazipur": {
-      "Gazipur Area": ["Gazipur Branch", "Konabari Branch"],
-      "Tongi Area": ["Tongi Branch", "Kaliakair Branch"],
-    },
-    "Tangail": {
-      "Tangail Area": ["Tangail Branch", "Mirzapur Branch"],
-      "Sakhipur Area": ["Sakhipur Branch"],
-    },
-  },
-  "Chattogram Division": {
-    "Comilla": {
-      "Comilla Area": ["Comilla Branch", "Debidwar Branch"],
-      "Chandina Area": ["Chandina Branch"],
-    },
-    "Chattogram": {
-      "Chattogram Metro Area": ["Chattogram Branch", "Pahartali Branch"],
-      "Patiya Area": ["Patiya Branch"],
-    },
-    "Cox's Bazar": {
-      "Cox's Bazar Area": ["Cox's Bazar Branch", "Teknaf Branch"],
-    },
-  },
-  "Sylhet Division": {
-    "Sylhet": {
-      "Sylhet Area": ["Sylhet Branch", "Zindabazar Branch"],
-      "Beanibazar Area": ["Beanibazar Branch"],
-    },
-    "Maulvibazar": {
-      "Maulvibazar Area": ["Maulvibazar Branch", "Sreemangal Branch"],
-    },
-  },
-  "Rajshahi Division": {
-    "Rajshahi": {
-      "Rajshahi Area": ["Rajshahi Branch", "Boalia Branch"],
-      "Puthia Area": ["Puthia Branch"],
-    },
-    "Bogra": {
-      "Bogra Area": ["Bogra Branch", "Sonatola Branch"],
-    },
-  },
-  "Khulna Division": {
-    "Khulna": {
-      "Khulna Area": ["Khulna Branch", "Sonadanga Branch"],
-      "Khalishpur Area": ["Khalishpur Branch"],
-    },
-    "Jessore": {
-      "Jessore Area": ["Jessore Branch", "Jhikargacha Branch"],
-    },
-  },
-  "Barisal Division": {
-    "Barisal": {
-      "Barisal Area": ["Barisal Branch", "Barisal Sadar Branch"],
-      "Bakerganj Area": ["Bakerganj Branch"],
-    },
-  },
-  "Rangpur Division": {
-    "Rangpur": {
-      "Rangpur Area": ["Rangpur Branch", "Rangpur City Branch"],
-      "Mithapukur Area": ["Mithapukur Branch"],
-    },
-  },
-  "Mymensingh Division": {
-    "Mymensingh": {
-      "Mymensingh Area": ["Mymensingh Branch", "Mymensingh Sadar Branch"],
-      "Trishal Area": ["Trishal Branch"],
-    },
-  },
-};
 
-const ALL_DISTRICTS = Object.values(LOCATIONS).flatMap(districts => Object.keys(districts));
-const ALL_AREAS = Object.values(LOCATIONS).flatMap(districts =>
-  Object.values(districts).flatMap(areas => Object.keys(areas))
-);
+// The location pickers are driven by the master office list (admin console →
+// Offices), so adding an office there makes it available here straight away.
 const areaOfficeName = (area) => `${area} Office`;
-const districtOfficeName = (district) => `${district} District Office`;
+const regionOfficeName = (region) => `${region} Region Office`;
+const allRegions = (tree) => Object.values(tree).flatMap((d) => Object.keys(d));
+const allAreas = (tree) => Object.values(tree).flatMap((d) => Object.values(d).flatMap((a) => Object.keys(a)));
+function findBranchPath(tree, branchName) {
+  for (const [division, districts] of Object.entries(tree)) {
+    for (const [region, areas] of Object.entries(districts)) {
+      for (const [area, branches] of Object.entries(areas)) {
+        if (branches.includes(branchName)) return { division, region, area };
+      }
+    }
+  }
+  return null;
+}
 
 const VILLAGE_ORGS = [
   "VO-104 · Dhanmondi Branch", "VO-118 · Dhanmondi Branch",
@@ -446,19 +80,11 @@ const VILLAGE_ORGS = [
   "VO-088 · Narayanganj Branch",
 ];
 
-function findBranchPath(branchName) {
-  for (const [division, regions] of Object.entries(LOCATIONS)) {
-    for (const [region, areas] of Object.entries(regions)) {
-      for (const [area, branches] of Object.entries(areas)) {
-        if (branches.includes(branchName)) return { division, region, area };
-      }
-    }
-  }
-  return null;
-}
-
-const REASONS = ["Monitoring", "Training", "Complaint resolution", "Survey", "Undefined"];
-const DEPARTMENTS = ["Construction", "Software", "HR", "Finance", "Operations", "Undefined"];
+const REASONS = ["Onboarding", "Monitoring", "Training", "Complaint resolution", "Survey", "Other"];
+// Complaint departments (and their units) come from the "departments" collection,
+// which the admin console manages; "Other" is always offered and has no units —
+// an admin picks the real department when assigning it.
+const OTHER_DEPARTMENT = "Other";
 const STAFF_FEEDBACK_TAGS = ["Branch well-run", "Staff shortage", "Needs equipment", "Process delays", "Documentation gaps", "Strong loan recovery"];
 const MEMBER_FEEDBACK_TAGS = ["Client satisfaction high", "Repayment concerns", "Wants more training", "Positive on service", "Access issues", "Trust in staff high"];
 
@@ -562,12 +188,12 @@ function StepCount({ steps }) {
   return { done, total };
 }
 
+// The wizard's order: Register → Complaints → Story → Feedback.
+const STEP_KEYS = ["register", "complaints", "story", "feedback"];
+
 function nextIncompleteStep(steps) {
-  if (!steps.register) return 0;
-  if (!steps.feedback) return 1;
-  if (!steps.complaints) return 2;
-  if (!steps.story) return 3;
-  return 3;
+  const i = STEP_KEYS.findIndex((k) => !steps[k]);
+  return i === -1 ? STEP_KEYS.length - 1 : i;
 }
 
 function RingProgress({ done, total }) {
@@ -598,6 +224,8 @@ export default function App() {
   const [employees, , employeesLoaded] = usePersistedCollection("employees", []);
   const [visits, setVisits] = usePersistedCollection("visits", []);
   const [departments] = usePersistedCollection("departments", []);
+  const [offices] = usePersistedCollection("offices", []);
+  const [settings] = usePersistedCollection("settings", DEFAULT_SETTINGS);
 
   // The session only remembers *which* employee is signed in (their id) —
   // the actual employee record always comes fresh from the "employees"
@@ -608,9 +236,12 @@ export default function App() {
   });
   const currentEmployee = employees.find((e) => e.id === sessionEmployeeId) || null;
 
-  const [staffTab, setStaffTab] = useState("dashboard"); // dashboard | history | wizard | myComplaints | fixerQueue | analytics
+  const [staffTab, setStaffTab] = useState("dashboard"); // dashboard | history | wizard | myComplaints | fixerQueue | branch
+  const [prevTab, setPrevTab] = useState("dashboard");
+  const [branchKey, setBranchKey] = useState(null);
   const [activeVisitId, setActiveVisitId] = useState(null);
   const [wizardStartStep, setWizardStartStep] = useState(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
@@ -630,9 +261,9 @@ export default function App() {
     window.location.href = "/";
   };
 
-  // Sign-in/registration now lives on the unified landing page ("/"). If
-  // there's no valid session here (never logged in, or a stale/deleted
-  // employee id), bounce back there instead of showing a login form.
+  // Sign-in/registration lives on the unified landing page ("/"). If there's
+  // no valid session here (never logged in, or a stale/deleted employee id),
+  // bounce back there instead of showing a login form.
   useEffect(() => {
     if (!employeesLoaded) return;
     if (!currentEmployee) {
@@ -642,13 +273,28 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [employeesLoaded, currentEmployee]);
 
+  // Ctrl/⌘ + K opens quick search
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); setPaletteOpen((o) => !o); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const roles = currentEmployee?.roles || [];
+  const isManagement = roles.includes("management");
+  const isFixer = roles.includes("fixer");
+  // Network health / coverage is admin-only unless the feature switch (src/lib/features.js) says otherwise
+  const seesNetwork = isManagement && FEATURES.managementSeesNetworkCoverage;
+  const tree =useMemo(() => buildLocationTree(offices), [offices]);
+  const target = settings?.visitTargetDays || DEFAULT_SETTINGS.visitTargetDays;
+  const coverage = useMemo(() => (isManagement ? computeCoverage(offices, visits, target) : []), [isManagement, offices, visits, target]);
+
   if (!employeesLoaded || !currentEmployee) {
     return (
       <div className="fvt">
-        <style>{STYLES}</style>
-        <div className="session-loading">
-          <div className="nav-logo"><MapPin size={18} color="#fff" /></div>
-        </div>
+        <div className="session-loading"><div className="brand-mark"><MapPin size={20} /></div></div>
       </div>
     );
   }
@@ -657,13 +303,14 @@ export default function App() {
   // registration details, both feedback types, every complaint filed, and the
   // story — all nested under that visit's own unique id in the "visits"
   // collection (server/db.json).
-  const openNewVisit = () => {
+  const openNewVisit = (prefill) => {
+    const p = prefill && prefill.key ? prefill : null; // from a branch profile; ignore click events
     const id = makeId("V");
     const draft = {
       id,
       employeeId: currentEmployee.id,
       employeeName: currentEmployee.name,
-      location: "", locationType: "branch", division: "", region: "", area: "",
+      location: p ? p.name : "", locationType: "branch", division: p ? p.division : "", region: p ? p.district : "", area: p ? p.area : "",
       date: "", visitTime: "", returnDate: "", returnTime: "", reason: "Monitoring", duration: "",
       steps: { register: false, feedback: false, complaints: false, story: false },
       feedback: null,
@@ -686,84 +333,102 @@ export default function App() {
     setVisits(vs => vs.map(v => v.id === id ? { ...v, ...patch } : v));
   };
 
-  const activeVisit = visits.find(v => v.id === activeVisitId);
-  const closeWizard = () => { setStaffTab("dashboard"); setActiveVisitId(null); setWizardStartStep(null); };
+  const openBranch = (office) => {
+    setPrevTab(staffTab === "branch" ? prevTab : staffTab);
+    setBranchKey(office.key);
+    setStaffTab("branch");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
+  const activeVisit = visits.find(v => v.id === activeVisitId);
+  const closeWizard = () => {
+    // opening the wizard saves a draft straight away; don't leave an untouched one behind
+    if (activeVisit && !activeVisit.location && !activeVisit.date && !Object.values(activeVisit.steps || {}).some(Boolean)) {
+      setVisits(vs => vs.filter(v => v.id !== activeVisit.id));
+    }
+    setStaffTab("dashboard"); setActiveVisitId(null); setWizardStartStep(null);
+  };
   const myVisits = visits.filter(v => v.employeeId === currentEmployee.id);
+  const branchRow = branchKey ? coverage.find((o) => o.key === branchKey) : null;
+
+  const assignedOpen = visits.flatMap((v) => v.complaints || []).filter((c) => c.assignedEmployeeId === currentEmployee.id && c.status !== "Resolved").length;
+  const tabs = [
+    { key: "dashboard", label: "Dashboard", short: "Home", icon: Home },
+    { key: "history", label: "Visits", short: "Visits", icon: ClipboardList },
+    { key: "myComplaints", label: "My complaints", short: "Complaints", icon: MessageCircle },
+    ...(seesNetwork ? [{ key: "network", label: "Network health", short: "Network", icon: Radar }] : []),
+    ...(isFixer ? [{ key: "fixerQueue", label: "Fixer queue", short: "Queue", icon: Wrench, count: assignedOpen }] : []),
+  ];
+  // the wizard belongs to "Visits"; a branch profile belongs to whichever page it was opened from
+  const shellActive = staffTab === "wizard" ? "history" : staffTab === "branch" ? (prevTab || "dashboard") : staffTab;
+
+  const paletteItems = [
+    { id: "go-dash", group: "Go to", label: "Dashboard", icon: Home, run: () => setStaffTab("dashboard") },
+    { id: "go-new", group: "Go to", label: "Register a new visit", icon: Plus, run: () => openNewVisit() },
+    { id: "go-visits", group: "Go to", label: "My visits", icon: ClipboardList, run: () => setStaffTab("history") },
+    { id: "go-comp", group: "Go to", label: "My complaints", icon: MessageCircle, run: () => setStaffTab("myComplaints") },
+    ...(seesNetwork ? [{ id: "go-net", group: "Go to", label: "Network health", icon: Radar, run: () => setStaffTab("network") }] : []),
+    ...(isFixer ? [{ id: "go-fix", group: "Go to", label: "Fixer queue", icon: Wrench, run: () => setStaffTab("fixerQueue") }] : []),
+    // branch search for management; the coverage status is only shown to those who may see coverage
+    ...(isManagement ? coverage.map((o) => ({
+      id: o.key, group: "Branches", label: o.name,
+      sub: seesNetwork ? `${o.area} · ${o.district} — ${STATUS_META[o.status].label}` : `${o.area} · ${o.district}`,
+      icon: MapPin, color: seesNetwork ? STATUS_META[o.status].color : undefined, run: () => openBranch(o),
+    })) : []),
+    ...myVisits.slice(0, 25).map((v) => ({
+      id: v.id, group: "My visits", label: v.location || "Untitled visit", sub: `${v.date || "Draft"} · ${v.reason || ""}`,
+      icon: Calendar, run: () => resumeVisit(v.id),
+    })),
+  ];
+
+  let content;
+  if (staffTab === "dashboard") {
+    content = (
+      <StaffDashboard
+        currentEmployee={currentEmployee} visits={visits} myVisits={myVisits} departments={departments}
+        offices={offices} settings={settings} isManagement={isManagement}
+        onNew={() => openNewVisit()} onResume={resumeVisit} onViewHistory={() => setStaffTab("history")}
+        setVisits={setVisits} onOpenBranch={openBranch}
+      />
+    );
+  } else if (staffTab === "history") {
+    content = <VisitHistory visits={myVisits} onResume={resumeVisit} onNew={() => openNewVisit()} />;
+  } else if (staffTab === "myComplaints") {
+    content = <MyComplaints currentEmployee={currentEmployee} visits={visits} />;
+  } else if (staffTab === "network" && seesNetwork) {
+    content = <NetworkHealth visits={visits} offices={offices} settings={settings} onOpenBranch={openBranch} />;
+  } else if (staffTab === "fixerQueue" && isFixer) {
+    content = <FixerQueue me={currentEmployee} visits={visits} setVisits={setVisits} showToast={showToast} />;
+  } else if (staffTab === "branch" && branchRow) {
+    content = <BranchProfile office={branchRow} coverageRows={coverage} onBack={() => setStaffTab(prevTab || "dashboard")} onNewVisit={openNewVisit} />;
+  } else if (staffTab === "wizard" && activeVisit) {
+    content = (
+      <VisitWizard
+        visit={activeVisit} tree={tree} departments={departments} startStep={wizardStartStep}
+        onUpdate={(patch) => updateVisit(activeVisit.id, patch)}
+        onDone={closeWizard} onExit={closeWizard} showToast={showToast}
+      />
+    );
+  } else {
+    content = null;
+  }
 
   return (
     <div className="fvt">
-      <style>{STYLES}</style>
+      <AppShell
+        theme={theme} onToggleTheme={toggleTheme} brandSub="BRAC · Head Office"
+        tabs={tabs} active={shellActive} pageKey={staffTab} onTab={setStaffTab}
+        fab={{ label: "New visit", icon: Plus, onClick: () => openNewVisit() }}
+        onSearch={() => setPaletteOpen(true)}
+        user={currentEmployee.name} userSub={roles.length ? roles.join(" · ") : "employee"} onLogout={handleLogout}
+      >
+        {content}
+      </AppShell>
 
-      <div className="nav">
-        <div className="nav-left">
-          <div className="nav-logo"><MapPin size={18} color="#fff" /></div>
-          <div>
-            <div className="nav-title">Field Visit Tracker</div>
-            <div className="nav-sub">BRAC Microfinance · Technology Unit</div>
-          </div>
-        </div>
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems}
+        placeholder={isManagement ? "Search pages, branches, visits…" : "Search pages and your visits…"} />
 
-        <div className="nav-tabs">
-          <button className={`nav-tab ${staffTab === "dashboard" ? "active" : ""}`} onClick={() => setStaffTab("dashboard")}>
-            <Home size={14} /> Dashboard
-          </button>
-          <button className={`nav-tab ${staffTab === "myComplaints" ? "active" : ""}`} onClick={() => setStaffTab("myComplaints")}>
-            <MessageCircle size={14} /> My Complaints
-          </button>
-          {(currentEmployee.roles || []).includes("fixer") && (
-            <button className={`nav-tab ${staffTab === "fixerQueue" ? "active" : ""}`} onClick={() => setStaffTab("fixerQueue")}>
-              <Wrench size={14} /> Fixer Queue
-            </button>
-          )}
-        </div>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <div className="avatar" title={currentEmployee.name}>{initials(currentEmployee.name)}</div>
-          <button className="logout-btn" title="Sign out" onClick={handleLogout}><LogOut size={16} /></button>
-        </div>
-      </div>
-
-      {staffTab === "dashboard" && (
-        <StaffDashboard
-          currentEmployee={currentEmployee}
-          visits={visits}
-          myVisits={myVisits}
-          departments={departments}
-          theme={theme}
-          onNew={openNewVisit}
-          onResume={resumeVisit}
-          onViewHistory={() => setStaffTab("history")}
-          setVisits={setVisits}
-        />
-      )}
-
-      {staffTab === "history" && (
-        <VisitHistory visits={myVisits} onResume={resumeVisit} onNew={openNewVisit} />
-      )}
-
-      {staffTab === "myComplaints" && (
-        <MyComplaints currentEmployee={currentEmployee} visits={visits} />
-      )}
-
-      {staffTab === "fixerQueue" && (currentEmployee.roles || []).includes("fixer") && (
-        <FixerQueue me={currentEmployee} visits={visits} setVisits={setVisits} showToast={showToast} />
-      )}
-
-      {staffTab === "wizard" && activeVisit && (
-        <VisitWizard
-          visit={activeVisit}
-          startStep={wizardStartStep}
-          onUpdate={(patch) => updateVisit(activeVisit.id, patch)}
-          onDone={closeWizard}
-          onExit={closeWizard}
-          showToast={showToast}
-        />
-      )}
-
-      {toast && (
-        <div className="toast"><Check size={15} /> {toast}</div>
-      )}
+      {toast && <div className="toast"><Check size={16} /> {toast}</div>}
     </div>
   );
 }
@@ -772,9 +437,9 @@ export default function App() {
 
 const STEP_ORDER = [
   { key:"register", label:"Register" },
-  { key:"feedback", label:"Feedback" },
   { key:"complaints", label:"Complaints" },
   { key:"story", label:"Story" },
+  { key:"feedback", label:"Feedback" },
 ];
 
 function VisitCard({ v, onResume }) {
@@ -818,7 +483,21 @@ function VisitCard({ v, onResume }) {
   );
 }
 
-function StaffDashboard({ currentEmployee, visits, myVisits, departments, theme, onNew, onResume, onViewHistory, setVisits }) {
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
+
+function SectionHead({ eyebrow, action }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
+      <p className="h-eyebrow" style={{ margin: 0, fontSize: 12 }}>{eyebrow}</p>
+      {action}
+    </div>
+  );
+}
+
+function StaffDashboard({ currentEmployee, visits, myVisits, departments, offices, settings, isManagement, onNew, onResume, onViewHistory, setVisits, onOpenBranch }) {
   // Every number here is derived live from the "visits" collection — nothing
   // is tracked separately, so it always matches what's actually stored.
   const myComplaints = myVisits.flatMap(v => v.complaints || []);
@@ -835,11 +514,16 @@ function StaffDashboard({ currentEmployee, visits, myVisits, departments, theme,
 
   const latestVisits = [...myVisits].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 3);
 
+  const months = useMemo(() => monthBuckets(6), []);
+  const mySpark = months.map(m => myVisits.filter(v => monthKeyOf(v.date) === m.key).length);
+  const thisMonth = mySpark[5], lastMonth = mySpark[4];
+  const officesVisited = new Set(myVisits.filter(v => v.location && v.steps?.register).map(v => v.location)).size;
+
   const [overviewExpanded, setOverviewExpanded] = useState(false);
   const [storiesExpanded, setStoriesExpanded] = useState(false);
-  const isManagement = (currentEmployee.roles || []).includes("management");
   const STORY_PREVIEW_COUNT = 4;
   const visibleStories = storiesExpanded ? allStories : allStories.slice(0, STORY_PREVIEW_COUNT);
+  const roles = currentEmployee.roles || [];
 
   const toggleLike = (visitId) => {
     setVisits(vs => vs.map(v => v.id === visitId
@@ -849,126 +533,133 @@ function StaffDashboard({ currentEmployee, visits, myVisits, departments, theme,
 
   return (
     <div className="page">
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:22, flexWrap:"wrap", gap:14 }}>
-        <div>
-          <p className="h-eyebrow">Welcome back</p>
-          <h1 className="h-title">{currentEmployee.name}</h1>
-          <p className="h-desc">{currentEmployee.phone} · Employee ID {currentEmployee.id}</p>
+      {/* hero */}
+      <Reveal className="hero">
+        <BdOutline className="hero-outline" />
+        <div className="hero-row">
+          <div>
+            <p className="h-eyebrow">{greeting()}</p>
+            <h1>{currentEmployee.name.split(" ")[0]}</h1>
+            <p style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {roles.map(r => <span key={r} className="role-chip">{r}</span>)}
+              <span>{currentEmployee.phone ? `${currentEmployee.phone} · ` : ""}ID {currentEmployee.id}</span>
+            </p>
+          </div>
+          <button className="btn btn-primary btn-lg" onClick={onNew}><Plus size={18} strokeWidth={2.6} /> Register new visit</button>
         </div>
-        <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> Register new visit</button>
-      </div>
+        <div className="hero-tiles">
+          <div className="hero-tile glass"><div className="ht-num"><CountUp value={myVisits.length} /></div><div className="ht-label">Your visits</div></div>
+          <div className="hero-tile glass"><div className="ht-num"><CountUp value={thisMonth} /></div><div className="ht-label">This month</div></div>
+          <div className="hero-tile glass"><div className="ht-num"><CountUp value={officesVisited} /></div><div className="ht-label">Offices visited</div></div>
+          <div className="hero-tile glass"><div className="ht-num"><CountUp value={openComplaints} /></div><div className="ht-label">Open complaints</div></div>
+        </div>
+      </Reveal>
 
-      <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom: 16 }}>
-        <p className="h-eyebrow" style={{ marginBottom:0 }}>Your overview</p>
-        <button className="btn btn-ghost btn-sm" onClick={() => setOverviewExpanded(e => !e)}>
-          {overviewExpanded ? <>Show less <ChevronUp size={13} /></> : <>Show more <ChevronDown size={13} /></>}
-        </button>
-      </div>
-
-      <div className="stat-section">
-        <div className="stat-section-heading">Visit Statistics</div>
+      {/* your overview */}
+      <div className="section-gap">
+        <SectionHead
+          eyebrow="Your overview"
+          action={
+            <button className="btn btn-ghost btn-sm" onClick={() => setOverviewExpanded(e => !e)}>
+              {overviewExpanded ? <>Show less <ChevronUp size={14} /></> : <>Show more <ChevronDown size={14} /></>}
+            </button>
+          }
+        />
         <div className="stat-row-group">
-          <div className="stat-card">
-            <div className="stat-num">{myVisits.length}</div>
-            <div className="stat-label">Total Visits</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-num">{todayVisits}</div>
-            <div className="stat-label">Today's Visits</div>
-          </div>
+          <Reveal i={0} className="stat-card">
+            <div className="stat-num"><CountUp value={myVisits.length} /></div>
+            <div className="stat-label">Total visits</div>
+            <div className="kpi-foot"><Sparkline data={mySpark} color="var(--brand)" w={92} h={26} /></div>
+          </Reveal>
+          <Reveal i={1} className="stat-card">
+            <div className="stat-num"><CountUp value={thisMonth} /></div>
+            <div className="stat-label">Visits this month</div>
+            <div className="kpi-foot"><DeltaChip current={thisMonth} previous={lastMonth} /><span /></div>
+          </Reveal>
+          <Reveal i={2} className="stat-card">
+            <div className="stat-num"><CountUp value={todayVisits} /></div>
+            <div className="stat-label">Today's visits</div>
+          </Reveal>
+          {overviewExpanded && (
+            <>
+              <Reveal i={0} className="stat-card"><div className="stat-num"><CountUp value={feedbacksLogged} /></div><div className="stat-label">Feedbacks logged</div></Reveal>
+              <Reveal i={1} className="stat-card"><div className="stat-num"><CountUp value={myStoriesCount} /></div><div className="stat-label">Stories shared</div></Reveal>
+              <Reveal i={2} className="stat-card"><div className="stat-num" style={{ color: "var(--danger)" }}><CountUp value={openComplaints} /></div><div className="stat-label">Open complaints</div></Reveal>
+              <Reveal i={3} className="stat-card"><div className="stat-num" style={{ color: "var(--success)" }}><CountUp value={resolvedComplaints} /></div><div className="stat-label">Resolved complaints</div></Reveal>
+            </>
+          )}
         </div>
       </div>
 
-      {overviewExpanded && (
-        <>
-          <div className="stat-section">
-            <div className="stat-section-heading">Activity Statistics</div>
-            <div className="stat-row-group">
-              <div className="stat-card">
-                <div className="stat-num">{feedbacksLogged}</div>
-                <div className="stat-label">Feedbacks Logged</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-num">{myStoriesCount}</div>
-                <div className="stat-label">Stories Shared</div>
-              </div>
-            </div>
+      {/* your visits */}
+      <div className="section-gap">
+        <SectionHead
+          eyebrow="Your visits"
+          action={<button className="btn btn-ghost btn-sm" onClick={onViewHistory}>View all <ChevronRight size={14} /></button>}
+        />
+        {latestVisits.length === 0 ? (
+          <div className="empty-note card card-pad">
+            <p style={{ margin: "0 0 14px" }}>No visits yet — register your first field visit to get started.</p>
+            <button className="btn btn-primary" onClick={onNew}><Plus size={16} /> Register new visit</button>
           </div>
-
-          <div className="stat-section">
-            <div className="stat-section-heading">Complaint Statistics</div>
-            <div className="stat-row-group">
-              <div className="stat-card">
-                <div className="stat-num">{openComplaints}</div>
-                <div className="stat-label">Open Complaints</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-num">{resolvedComplaints}</div>
-                <div className="stat-label">Resolved Complaints</div>
-              </div>
-            </div>
+        ) : (
+          <div className="snap-row">
+            {latestVisits.map((v, i) => <Reveal key={v.id} i={i}><VisitCard v={v} onResume={onResume} /></Reveal>)}
           </div>
-        </>
-      )}
-
-      <div style={{ marginTop: 24, marginBottom:12, display:"flex", alignItems:"baseline", justifyContent:"space-between" }}>
-        <p className="h-eyebrow" style={{ marginBottom:0 }}>Your visits</p>
-        <button className="btn btn-ghost btn-sm" onClick={onViewHistory}>
-          View all <ChevronRight size={13} />
-        </button>
-      </div>
-      {latestVisits.length === 0 ? (
-        <div className="empty-note card card-pad">No visits yet — register your first field visit to get started.</div>
-      ) : (
-        <div className="visit-grid">
-          {latestVisits.map(v => <VisitCard key={v.id} v={v} onResume={onResume} />)}
-        </div>
-      )}
-
-      {isManagement && <Analytics visits={visits} departments={departments} theme={theme} />}
-
-      <div style={{ marginTop:34, marginBottom:12, display:"flex", alignItems:"baseline", justifyContent:"space-between" }}>
-        <p className="h-eyebrow" style={{ marginBottom:0 }}>Story feed</p>
-        {allStories.length > STORY_PREVIEW_COUNT && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setStoriesExpanded(e => !e)}>
-            {storiesExpanded ? <>Show less <ChevronUp size={13} /></> : <>Show more <ChevronDown size={13} /></>}
-          </button>
         )}
       </div>
 
-      {allStories.length === 0 ? (
-        <div className="empty-note card card-pad">No stories posted yet.</div>
-      ) : (
-        <div className="feed-grid">
-          {visibleStories.map((s, i) => (
-            <div className="story-card" key={s.visitId || i}>
-              <div className="story-photo" style={s.photoUrl ? undefined : { background: s.gradient || photoGradients[i % photoGradients.length] }}>
-                {s.photoUrl ? (
-                  <img src={s.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <Camera size={28} color="rgba(255,255,255,0.85)" />
-                )}
-                <div className="story-photo-tag"><MapPin size={11} /> {s.location}</div>
-              </div>
-              <div className="story-head">
-                <div className="avatar">{initials(s.staffName)}</div>
-                <div>
-                  <div className="story-name">{s.staffName}</div>
-                  <div className="story-loc">{s.location} · {s.date}</div>
-                </div>
-              </div>
-              <div className="story-cap">{s.caption}</div>
-              <div className="story-actions">
-                <button className={`story-action ${s.liked ? "liked" : ""}`} onClick={() => toggleLike(s.visitId)}>
-                  <Heart size={16} fill={s.liked ? "var(--magenta)" : "none"} /> {s.likes || 0}
-                </button>
-                <button className="story-action"><MessageCircle size={16} /> {s.comments || 0}</button>
-                <button className="story-action" style={{ marginLeft:"auto" }}><Share2 size={16} /></button>
-              </div>
-            </div>
-          ))}
+      {/* management view: visit + complaint analytics (network health & coverage live in their own tab) */}
+      {isManagement && (
+        <div className="section-gap">
+          <Analytics visits={visits} offices={offices} departments={departments} settings={settings} onOpenBranch={onOpenBranch} />
         </div>
       )}
+
+      {/* story feed */}
+      <div className="section-gap">
+        <SectionHead
+          eyebrow="Story feed"
+          action={allStories.length > STORY_PREVIEW_COUNT && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setStoriesExpanded(e => !e)}>
+              {storiesExpanded ? <>Show less <ChevronUp size={14} /></> : <>Show more <ChevronDown size={14} /></>}
+            </button>
+          )}
+        />
+        {allStories.length === 0 ? (
+          <div className="empty-note card card-pad">No stories posted yet.</div>
+        ) : (
+          <div className="feed-grid">
+            {visibleStories.map((s, i) => (
+              <Reveal className="story-card" i={i % 4} key={s.visitId || i}>
+                <div className="story-photo" style={s.photoUrl ? undefined : { background: s.gradient || photoGradients[i % photoGradients.length] }}>
+                  {s.photoUrl ? (
+                    <img src={s.photoUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    <Camera size={28} color="rgba(255,255,255,0.85)" />
+                  )}
+                  <div className="story-photo-tag"><MapPin size={11} /> {s.location}</div>
+                </div>
+                <div className="story-head">
+                  <div className="avatar">{initials(s.staffName)}</div>
+                  <div>
+                    <div className="story-name">{s.staffName}</div>
+                    <div className="story-loc">{s.location} · {s.date}</div>
+                  </div>
+                </div>
+                <div className="story-cap">{s.caption}</div>
+                <div className="story-actions">
+                  <button className={`story-action ${s.liked ? "liked" : ""}`} onClick={() => toggleLike(s.visitId)}>
+                    <Heart size={17} fill={s.liked ? "var(--brand)" : "none"} /> {s.likes || 0}
+                  </button>
+                  <button className="story-action"><MessageCircle size={17} /> {s.comments || 0}</button>
+                  <button className="story-action" style={{ marginLeft: "auto" }}><Share2 size={17} /></button>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1033,9 +724,10 @@ function MyComplaints({ currentEmployee, visits }) {
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 12, color: "var(--ink-soft)" }}>
               <span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span>
-              <span className="source-badge">{c.department}</span>
+              <span className="source-badge">{c.department}{c.unit ? ` · ${c.unit}` : ""}</span>
               <span>Filed {c.filedDate} · Visit: {c.visitLocation || c.visitId}</span>
             </div>
+            {c.person && <PersonDetails kind={c.source} person={c.person} compact />}
             {c.photoUrl && (
               <img src={c.photoUrl} alt="" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 8, marginTop: 10 }} />
             )}
@@ -1065,13 +757,21 @@ function MyComplaints({ currentEmployee, visits }) {
 function FixerQueue({ me, visits, setVisits, showToast }) {
   const [busyId, setBusyId] = useState(null);
 
-  const myComplaints = visits
+  // Work still to do comes first (escalated ones at the very top, then the soonest
+  // deadline); resolved complaints sit at the bottom, newest first.
+  const mine = visits
     .flatMap(v => (v.complaints || []).map(c => ({ ...c, visitId: v.id, location: v.location, visitDate: v.date })))
-    .filter(c => c.assignedEmployeeId === me.id)
-    .sort((a, b) => new Date(b.deadlineSetAt || 0) - new Date(a.deadlineSetAt || 0));
+    .filter(c => c.assignedEmployeeId === me.id);
+  const inProgress = mine
+    .filter(c => c.status !== "Resolved")
+    .sort((a, b) => (b.escalated ? 1 : 0) - (a.escalated ? 1 : 0) || new Date(a.deadline || 8.64e15) - new Date(b.deadline || 8.64e15));
+  const resolved = mine
+    .filter(c => c.status === "Resolved")
+    .sort((a, b) => new Date(b.resolvedAt || 0) - new Date(a.resolvedAt || 0));
+  const myComplaints = [...inProgress, ...resolved];
 
   const assignedCount = myComplaints.length;
-  const fixedCount = myComplaints.filter(c => c.status === "Resolved").length;
+  const fixedCount = resolved.length;
 
   const handleResolve = async (c) => {
     setBusyId(c.id);
@@ -1103,8 +803,11 @@ function FixerQueue({ me, visits, setVisits, showToast }) {
       {myComplaints.length === 0 ? (
         <div className="card empty-note card-pad">Nothing assigned to you yet.</div>
       ) : (
-        myComplaints.map((c) => (
-          <div className="card complaint-card" key={c.id} style={{ marginBottom: 12, padding: 16 }}>
+        myComplaints.map((c, idx) => (
+          <React.Fragment key={c.id}>
+          {idx === 0 && inProgress.length > 0 && <QueueHeading label="In progress" count={inProgress.length} />}
+          {idx === inProgress.length && resolved.length > 0 && <QueueHeading label="Resolved" count={resolved.length} />}
+          <div className="card complaint-card" style={{ marginBottom: 12, padding: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 8 }}>
               <div>
                 <span className="mono" style={{ fontSize: 11, color: "var(--ink-faint)" }}>{c.id}</span>
@@ -1117,9 +820,15 @@ function FixerQueue({ me, visits, setVisits, showToast }) {
               <img src={c.photoUrl} alt="" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 8, marginBottom: 8 }} />
             )}
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: "var(--ink-soft)", marginBottom: 8 }}>
               <span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span>
+              <span className="source-badge">{c.department}{c.unit ? ` · ${c.unit}` : ""}</span>
               <span>Visit: {c.location} · {c.visitDate}</span>
+            </div>
+
+            {/* who raised it and how to reach them, so the fixer can follow up */}
+            <div style={{ marginBottom: 10 }}>
+              <PersonDetails kind={c.source} person={c.person} consent={c.consent} />
             </div>
 
             {c.deadline && (
@@ -1150,24 +859,34 @@ function FixerQueue({ me, visits, setVisits, showToast }) {
               </button>
             )}
           </div>
+          </React.Fragment>
         ))
       )}
     </div>
   );
 }
 
+function QueueHeading({ label, count }) {
+  return (
+    <div className="section-header" style={{ margin: "6px 0 12px" }}>
+      <div className="section-title">{label}</div>
+      <span className="badge-count">{count}</span>
+    </div>
+  );
+}
+
 /* ============================== VISIT WIZARD ============================== */
 
-const WIZARD_STEPS = ["Register", "Feedback", "Complaints", "Story"];
+const WIZARD_STEPS = ["Register", "Complaints", "Story", "Feedback"];
 
-function OfficeModal({ onClose, onSelect }) {
+function OfficeModal({ tree, onClose, onSelect }) {
   const [officeType, setOfficeType] = useState("area");
   const [choice, setChoice] = useState("");
 
   const changeType = (t) => { setOfficeType(t); setChoice(""); };
 
-  const options = officeType === "area" ? ALL_AREAS.map(areaOfficeName)
-    : officeType === "regional" ? ALL_DISTRICTS.map(districtOfficeName)
+  const options = officeType === "area" ? allAreas(tree).map(areaOfficeName)
+    : officeType === "regional" ? allRegions(tree).map(regionOfficeName)
     : VILLAGE_ORGS;
 
   return (
@@ -1184,7 +903,7 @@ function OfficeModal({ onClose, onSelect }) {
             <label className="field-label">Office type</label>
             <div className="seg">
               <button className={`seg-btn ${officeType === "area" ? "active" : ""}`} onClick={() => changeType("area")}>Area Office</button>
-              <button className={`seg-btn ${officeType === "regional" ? "active" : ""}`} onClick={() => changeType("regional")}>District Office</button>
+              <button className={`seg-btn ${officeType === "regional" ? "active" : ""}`} onClick={() => changeType("regional")}>Region Office</button>
               <button className={`seg-btn ${officeType === "vo" ? "active" : ""}`} onClick={() => changeType("vo")}>Village Org</button>
             </div>
           </div>
@@ -1204,12 +923,12 @@ function OfficeModal({ onClose, onSelect }) {
   );
 }
 
-function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) {
+function VisitWizard({ visit, tree, departments, startStep, onUpdate, onDone, onExit, showToast }) {
   const [step, setStep] = useState(startStep ?? nextIncompleteStep(visit.steps));
   const [finished, setFinished] = useState(false);
 
   const initialLocType = visit.locationType || "branch";
-  const initialPath = initialLocType === "branch" ? findBranchPath(visit.location) : null;
+  const initialPath = initialLocType === "branch" ? findBranchPath(tree, visit.location) : null;
   const [locationType, setLocationType] = useState(initialLocType);
   const [division, setDivision] = useState(initialPath?.division || "");
   const [region, setRegion] = useState(initialPath?.region || "");
@@ -1233,19 +952,32 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
   const [memberNotes, setMemberNotes] = useState(visit.feedback?.member?.notes || "");
   const [membersConsulted, setMembersConsulted] = useState(visit.feedback?.member?.count || "");
   const [feedbackType, setFeedbackType] = useState(visit.feedback?.activeType || "staff");
+  // Who gave the feedback — all optional. Staff: name, PIN, department, contact.
+  // Member: name, phone, member number, VO code.
+  const [staffPerson, setStaffPerson] = useState({ ...emptyPerson("staff"), ...(visit.feedback?.staff?.person || {}) });
+  const [memberPerson, setMemberPerson] = useState({ ...emptyPerson("member"), ...(visit.feedback?.member?.person || {}) });
 
   // Complaint fields — a visit can carry any number of complaints, each
   // filed either by staff or by a member, all nested under this visit's id.
+  // A complaint is routed by department first, then by one of that department's units.
   const [hasComplaints, setHasComplaints] = useState(visit.complaints && visit.complaints.length > 0 ? true : (visit.steps.complaints ? false : null));
-  const [complaintDraft, setComplaintDraft] = useState({
+  const emptyComplaint = () => ({
     source: "staff", // "staff" or "member"
-    department: "Construction",
+    // optional details of whoever raised it — one set per source, only the chosen one is saved
+    staffPerson: emptyPerson("staff"),
+    memberPerson: emptyPerson("member"),
+    department: "",
+    unit: "",
     description: "",
     urgency: "Medium",
     consent: null,
     photoUrl: null,
   });
+  const [complaintDraft, setComplaintDraft] = useState(emptyComplaint);
   const [complaintsList, setComplaintsList] = useState(visit.complaints || []);
+  const draftDept = (departments || []).find((d) => d.name === complaintDraft.department);
+  const draftUnits = draftDept?.units || [];
+  const draftReady = complaintDraft.description.trim() && complaintDraft.department && (draftUnits.length === 0 || complaintDraft.unit);
 
   const [caption, setCaption] = useState(visit.story?.caption || "");
   const [storyPhotoUrl, setStoryPhotoUrl] = useState(visit.story?.photoUrl || null);
@@ -1264,48 +996,49 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
     setStep(1);
   };
 
+  // Feedback is the last step: saving it completes the visit. The person details
+  // are optional; only the ones actually filled in are stored.
   const saveFeedback = (skip) => {
-    if (skip) { setStep(2); return; }
+    if (skip) { onExit(); return; }
+    const sp = compactPerson(staffPerson), mp = compactPerson(memberPerson);
     onUpdate({
       feedback: {
-        staff: { tags: staffTags, rating: staffRating, notes: staffNotes },
-        member: { tags: memberTags, rating: memberRating, notes: memberNotes, count: membersConsulted },
+        staff: { tags: staffTags, rating: staffRating, notes: staffNotes, ...(hasPerson(sp) ? { person: sp } : {}) },
+        member: { tags: memberTags, rating: memberRating, notes: memberNotes, count: membersConsulted, ...(hasPerson(mp) ? { person: mp } : {}) },
         activeType: feedbackType,
       },
       steps: { ...visit.steps, feedback: true },
     });
-    setStep(2);
+    setFinished(true);
   };
 
   const addComplaintToList = () => {
-    if (!complaintDraft.description.trim()) return;
-    setComplaintsList(l => [...l, { ...complaintDraft, id: makeId("FC") }]);
-    setComplaintDraft({
-      source: "staff",
-      department: "Construction",
-      description: "",
-      urgency: "Medium",
-      consent: null,
-      photoUrl: null,
-    });
+    if (!draftReady) return;
+    const { staffPerson: sp, memberPerson: mp, ...rest } = complaintDraft;
+    const person = compactPerson(rest.source === "member" ? mp : sp);
+    setComplaintsList(l => [...l, { ...rest, unit: rest.unit || null, person: hasPerson(person) ? person : null, id: makeId("FC") }]);
+    setComplaintDraft(emptyComplaint());
   };
 
   const saveComplaints = (skip) => {
-    if (skip) { setStep(3); return; }
+    if (skip) { setStep(2); return; }
     // Each complaint is enriched with the admin-workflow fields here, once,
     // when it's first attached to the visit — the admin console reads and
     // mutates these same nested objects directly (nothing is duplicated
     // into a separate collection).
     const finalList = hasComplaints ? complaintsList.map(c => ({
+      ...c, // keep anything the admin workflow already added (fixer, deadline history, escalation…)
       id: c.id,
       source: c.source,
       department: c.department,
+      unit: c.unit ?? null,
+      person: c.person ?? null, // optional details of the staff member / member who raised it
       description: c.description,
       urgency: c.urgency,
       consent: c.consent,
       photoUrl: c.photoUrl ?? null,
       status: c.status || "Open",
-      filedBy: visit.employeeName,
+      filedBy: c.filedBy || visit.employeeName,
       visitId: visit.id,
       filedDate: visit.date || new Date().toISOString().slice(0, 10),
       assignedTo: c.assignedTo ?? null,
@@ -1317,11 +1050,11 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
     })) : [];
     onUpdate({ complaints: finalList, steps: { ...visit.steps, complaints: true } });
     if (finalList.length) showToast(`${finalList.length} complaint${finalList.length > 1 ? "s" : ""} filed`);
-    setStep(3);
+    setStep(2);
   };
 
   const saveStory = (skip) => {
-    if (skip) { onExit(); return; }
+    if (skip) { setStep(3); return; }
     onUpdate({
       story: {
         caption, posted: true, likes: visit.story?.likes || 0, comments: visit.story?.comments || 0,
@@ -1330,7 +1063,7 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
       },
       steps: { ...visit.steps, story: true },
     });
-    setFinished(true);
+    setStep(3);
   };
 
   if (finished) {
@@ -1391,14 +1124,14 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
                       <label className="field-label">Division</label>
                       <select className="select" value={division} onChange={e => { setDivision(e.target.value); setRegion(""); setArea(""); setLocation(""); }}>
                         <option value="">Select division…</option>
-                        {Object.keys(LOCATIONS).map(d => <option key={d}>{d}</option>)}
+                        {Object.keys(tree).map(d => <option key={d}>{d}</option>)}
                       </select>
                     </div>
                     <div className="field-group">
-                      <label className="field-label">District</label>
+                      <label className="field-label">Region</label>
                       <select className="select" value={region} disabled={!division} onChange={e => { setRegion(e.target.value); setArea(""); setLocation(""); }}>
-                        <option value="">Select district…</option>
-                        {division && Object.keys(LOCATIONS[division]).map(r => <option key={r}>{r}</option>)}
+                        <option value="">Select region…</option>
+                        {division && Object.keys(tree[division] || {}).map(r => <option key={r}>{r}</option>)}
                       </select>
                     </div>
                   </div>
@@ -1407,27 +1140,27 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
                       <label className="field-label">Area</label>
                       <select className="select" value={area} disabled={!region} onChange={e => { setArea(e.target.value); setLocation(""); }}>
                         <option value="">Select area…</option>
-                        {division && region && Object.keys(LOCATIONS[division][region]).map(a => <option key={a}>{a}</option>)}
+                        {division && region && Object.keys((tree[division] || {})[region] || {}).map(a => <option key={a}>{a}</option>)}
                       </select>
                     </div>
                     <div className="field-group">
                       <label className="field-label">Branch</label>
                       <select className="select" value={location} disabled={!area} onChange={e => setLocation(e.target.value)}>
                         <option value="">Select branch…</option>
-                        {division && region && area && LOCATIONS[division][region][area].map(b => <option key={b}>{b}</option>)}
+                        {division && region && area && (((tree[division] || {})[region] || {})[area] || []).map(b => <option key={b}>{b}</option>)}
                       </select>
                     </div>
                   </div>
                   <div className="loc-office-row">
                     <button className="loc-office-btn" onClick={() => setShowOfficeModal(true)}>
-                      <Building2 size={13} /> Visiting an Area/District Office or Village Organisation instead?
+                      <Building2 size={13} /> Visiting an Area/Region Office or Village Organisation instead?
                     </button>
                   </div>
                 </>
               )}
 
               {showOfficeModal && (
-                <OfficeModal
+                <OfficeModal tree={tree}
                   onClose={() => setShowOfficeModal(false)}
                   onSelect={(name) => { setLocation(name); setLocationType("office"); setShowOfficeModal(false); }}
                 />
@@ -1478,6 +1211,148 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
           {step === 1 && (
             <>
               <div className="field-group">
+                <label className="field-label">Any complaints received?</label>
+                <div className="toggle-yn">
+                  <button className={hasComplaints === true ? "active-yes" : ""} onClick={() => setHasComplaints(true)}>Yes</button>
+                  <button className={hasComplaints === false ? "active-no" : ""} onClick={() => setHasComplaints(false)}>No</button>
+                </div>
+              </div>
+
+              {hasComplaints && (
+                <>
+                  {complaintsList.map((c, i) => (
+                    <div className="complaint-mini" key={c.id || i}>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        {c.photoUrl && (
+                          <img src={c.photoUrl} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+                        )}
+                        <div>
+                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                            <span className="source-badge">{c.source}</span>
+                            <strong style={{ fontSize:13 }}>{c.department}{c.unit ? ` · ${c.unit}` : ""}</strong>
+                            <span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span>
+                          </div>
+                          <div style={{ fontSize:12.5, color:"var(--ink-soft)" }}>{c.description}</div>
+                          {c.person && <PersonDetails kind={c.source} person={c.person} compact />}
+                          <div style={{ fontSize:11, color:"var(--ink-faint)", marginTop:4 }}>
+                            Consent to follow up: {c.consent ? "Yes" : "No"}
+                          </div>
+                        </div>
+                      </div>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setComplaintsList(l => l.filter((_, idx) => idx !== i))}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+
+                  <div className="card card-pad" style={{ background:"var(--paper)" }}>
+                    {/* The flow: Member/Staff info → Description → Urgency → Photo → Assign to → Consent → Add */}
+
+                    {/* 1 · who is raising it */}
+                    <div className="field-group" style={{ marginBottom:14 }}>
+                      <label className="field-label">Complaint Source</label>
+                      <div className="seg">
+                        <button className={`seg-btn ${complaintDraft.source === "staff" ? "active" : ""}`} onClick={() => setComplaintDraft(d => ({ ...d, source: "staff" }))}>
+                          Staff
+                        </button>
+                        <button className={`seg-btn ${complaintDraft.source === "member" ? "active" : ""}`} onClick={() => setComplaintDraft(d => ({ ...d, source: "member" }))}>
+                          Member
+                        </button>
+                      </div>
+                    </div>
+
+                    <PersonFields
+                      kind={complaintDraft.source}
+                      title="Who is raising this complaint?"
+                      value={complaintDraft.source === "member" ? complaintDraft.memberPerson : complaintDraft.staffPerson}
+                      onChange={(p) => setComplaintDraft(d => ({ ...d, [d.source === "member" ? "memberPerson" : "staffPerson"]: p }))}
+                      departments={departments}
+                    />
+
+                    {/* 2 · description */}
+                    <div className="field-group" style={{ marginBottom:12 }}>
+                      <label className="field-label">Description</label>
+                      <textarea className="textarea" placeholder={`Describe the complaint from ${complaintDraft.source}…`} value={complaintDraft.description} onChange={e => setComplaintDraft(d => ({ ...d, description: e.target.value }))} />
+                    </div>
+
+                    {/* 3 · urgency */}
+                    <div className="field-group" style={{ marginBottom:12 }}>
+                      <label className="field-label">Urgency</label>
+                      <div className="seg">
+                        {["Low","Medium","High"].map(u => (
+                          <button key={u} className={`seg-btn ${complaintDraft.urgency === u ? "active" : ""}`} onClick={() => setComplaintDraft(d => ({ ...d, urgency:u }))}>{u}</button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 4 · photo */}
+                    <div className="field-group" style={{ marginBottom:14 }}>
+                      <label className="field-label">Photo (optional)</label>
+                      <PhotoUploadBox photoUrl={complaintDraft.photoUrl} onChange={(url) => setComplaintDraft(d => ({ ...d, photoUrl: url }))} />
+                    </div>
+
+                    {/* 5 · assign to: a unit, then one of its teams */}
+                    <div className="assign-box">
+                      <p className="assign-title">Assign to</p>
+                      <div className="field-row">
+                        <div className="field-group" style={{ marginBottom:12 }}>
+                          <label className="field-label">{TERMS.unit}</label>
+                          <select className="select" value={complaintDraft.department} onChange={e => setComplaintDraft(d => ({ ...d, department: e.target.value, unit: "" }))}>
+                            <option value="">{`Select ${lower(TERMS.unit)}…`}</option>
+                            {(departments || []).map(d => <option key={d.id}>{d.name}</option>)}
+                            <option>{OTHER_DEPARTMENT}</option>
+                          </select>
+                        </div>
+                        <div className="field-group" style={{ marginBottom:12 }}>
+                          <label className="field-label">{TERMS.team}</label>
+                          <select className="select" value={complaintDraft.unit} disabled={draftUnits.length === 0}
+                                  onChange={e => setComplaintDraft(d => ({ ...d, unit: e.target.value }))}>
+                            <option value="">
+                              {!complaintDraft.department ? `Select ${lower(TERMS.unit)} first…` : draftUnits.length ? `Select ${lower(TERMS.team)}…` : `No ${lower(TERMS.teams)} — admin will route it`}
+                            </option>
+                            {draftUnits.map(u => <option key={u.id}>{u.name}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 6 · consent */}
+                    <div className="field-group" style={{ marginBottom:14 }}>
+                      <label className="field-label">Consent to follow up</label>
+                      <div className="toggle-yn">
+                        <button className={complaintDraft.consent === true ? "active-yes" : ""} onClick={() => setComplaintDraft(d => ({ ...d, consent:true }))}>Yes</button>
+                        <button className={complaintDraft.consent === false ? "active-no" : ""} onClick={() => setComplaintDraft(d => ({ ...d, consent:false }))}>No</button>
+                      </div>
+                    </div>
+
+                    {/* 7 · add */}
+                    <button className="btn btn-secondary btn-sm" onClick={addComplaintToList} disabled={!draftReady}><Plus size={13} /> Add complaint</button>
+                    {!draftReady && complaintDraft.description.trim() && (
+                      <span className="field-hint" style={{ marginLeft: 10 }}>
+                        {!complaintDraft.department ? `Choose a ${lower(TERMS.unit)}` : `Choose a ${lower(TERMS.team)}`} to add it.
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <div className="field-group">
+                <label className="field-label">Photo</label>
+                <PhotoUploadBox photoUrl={storyPhotoUrl} onChange={setStoryPhotoUrl} hint="JPG or PNG" />
+              </div>
+              <div className="field-group">
+                <label className="field-label">Caption / story</label>
+                <textarea className="textarea" placeholder="Share a moment from this visit…" value={caption} onChange={e => setCaption(e.target.value)} />
+              </div>
+            </>
+          )}
+          {step === 3 && (
+            <>
+              <div className="field-group">
                 <label className="field-label">Feedback from</label>
                 <div className="seg">
                   <button className={`seg-btn ${feedbackType === "staff" ? "active" : ""}`} onClick={() => setFeedbackType("staff")}>
@@ -1489,9 +1364,15 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
                 </div>
               </div>
 
+              {/* Feedback order: Staff/Member information → (Members consulted, member form only) → Notes / description → Quick tags → Overall rating */}
               {feedbackType === "staff" && (
                 <>
                   <p className="h-eyebrow" style={{ marginBottom:10 }}>Staff feedback</p>
+                  <PersonFields kind="staff" title="Staff information" value={staffPerson} onChange={setStaffPerson} departments={departments} />
+                  <div className="field-group">
+                    <label className="field-label">Notes / description</label>
+                    <textarea className="textarea" placeholder="Notes from staff…" value={staffNotes} onChange={e => setStaffNotes(e.target.value)} />
+                  </div>
                   <div className="field-group">
                     <label className="field-label">Quick tags</label>
                     <div>
@@ -1510,19 +1391,20 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
                       ))}
                     </div>
                   </div>
-                  <div className="field-group">
-                    <label className="field-label">Notes</label>
-                    <textarea className="textarea" placeholder="Notes from staff…" value={staffNotes} onChange={e => setStaffNotes(e.target.value)} />
-                  </div>
                 </>
               )}
 
               {feedbackType === "member" && (
                 <>
                   <p className="h-eyebrow" style={{ marginBottom:10 }}>Member (client) feedback</p>
+                  <PersonFields kind="member" title="Member information" value={memberPerson} onChange={setMemberPerson} />
                   <div className="field-group">
                     <label className="field-label">Members consulted</label>
                     <input className="input" type="number" min="0" placeholder="e.g. 12" value={membersConsulted} onChange={e => setMembersConsulted(e.target.value)} />
+                  </div>
+                  <div className="field-group">
+                    <label className="field-label">Notes / description</label>
+                    <textarea className="textarea" placeholder="Notes from members…" value={memberNotes} onChange={e => setMemberNotes(e.target.value)} />
                   </div>
                   <div className="field-group">
                     <label className="field-label">Quick tags</label>
@@ -1542,114 +1424,11 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
                       ))}
                     </div>
                   </div>
-                  <div className="field-group">
-                    <label className="field-label">Notes</label>
-                    <textarea className="textarea" placeholder="Notes from members…" value={memberNotes} onChange={e => setMemberNotes(e.target.value)} />
-                  </div>
                 </>
               )}
             </>
           )}
 
-          {step === 2 && (
-            <>
-              <div className="field-group">
-                <label className="field-label">Any complaints received?</label>
-                <div className="toggle-yn">
-                  <button className={hasComplaints === true ? "active-yes" : ""} onClick={() => setHasComplaints(true)}>Yes</button>
-                  <button className={hasComplaints === false ? "active-no" : ""} onClick={() => setHasComplaints(false)}>No</button>
-                </div>
-              </div>
-
-              {hasComplaints && (
-                <>
-                  {complaintsList.map((c, i) => (
-                    <div className="complaint-mini" key={c.id || i}>
-                      <div style={{ display: "flex", gap: 10 }}>
-                        {c.photoUrl && (
-                          <img src={c.photoUrl} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
-                        )}
-                        <div>
-                          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
-                            <span className="source-badge">{c.source}</span>
-                            <strong style={{ fontSize:13 }}>{c.department}</strong>
-                            <span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span>
-                          </div>
-                          <div style={{ fontSize:12.5, color:"var(--ink-soft)" }}>{c.description}</div>
-                          <div style={{ fontSize:11, color:"var(--ink-faint)", marginTop:4 }}>
-                            Consent to follow up: {c.consent ? "Yes" : "No"}
-                          </div>
-                        </div>
-                      </div>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setComplaintsList(l => l.filter((_, idx) => idx !== i))}>
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-
-                  <div className="card card-pad" style={{ background:"var(--paper)" }}>
-                    <div className="field-group" style={{ marginBottom:14 }}>
-                      <label className="field-label">Complaint Source</label>
-                      <div className="seg">
-                        <button className={`seg-btn ${complaintDraft.source === "staff" ? "active" : ""}`} onClick={() => setComplaintDraft(d => ({ ...d, source: "staff" }))}>
-                          Staff
-                        </button>
-                        <button className={`seg-btn ${complaintDraft.source === "member" ? "active" : ""}`} onClick={() => setComplaintDraft(d => ({ ...d, source: "member" }))}>
-                          Member
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="field-row">
-                      <div className="field-group" style={{ marginBottom:12 }}>
-                        <label className="field-label">Department</label>
-                        <select className="select" value={complaintDraft.department} onChange={e => setComplaintDraft(d => ({ ...d, department: e.target.value }))}>
-                          {DEPARTMENTS.map(d => <option key={d}>{d}</option>)}
-                        </select>
-                      </div>
-                      <div className="field-group" style={{ marginBottom:12 }}>
-                        <label className="field-label">Urgency</label>
-                        <div className="seg">
-                          {["Low","Medium","High"].map(u => (
-                            <button key={u} className={`seg-btn ${complaintDraft.urgency === u ? "active" : ""}`} onClick={() => setComplaintDraft(d => ({ ...d, urgency:u }))}>{u}</button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="field-group" style={{ marginBottom:12 }}>
-                      <label className="field-label">Description</label>
-                      <textarea className="textarea" placeholder={`Describe the complaint from ${complaintDraft.source}…`} value={complaintDraft.description} onChange={e => setComplaintDraft(d => ({ ...d, description: e.target.value }))} />
-                    </div>
-                    <div className="field-group" style={{ marginBottom:14 }}>
-                      <label className="field-label">Consent to follow up</label>
-                      <div className="toggle-yn">
-                        <button className={complaintDraft.consent === true ? "active-yes" : ""} onClick={() => setComplaintDraft(d => ({ ...d, consent:true }))}>Yes</button>
-                        <button className={complaintDraft.consent === false ? "active-no" : ""} onClick={() => setComplaintDraft(d => ({ ...d, consent:false }))}>No</button>
-                      </div>
-                    </div>
-                    <div className="field-group" style={{ marginBottom:14 }}>
-                      <label className="field-label">Photo (optional)</label>
-                      <PhotoUploadBox photoUrl={complaintDraft.photoUrl} onChange={(url) => setComplaintDraft(d => ({ ...d, photoUrl: url }))} />
-                    </div>
-                    <button className="btn btn-secondary btn-sm" onClick={addComplaintToList}><Plus size={13} /> Add complaint</button>
-                  </div>
-                </>
-              )}
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <div className="field-group">
-                <label className="field-label">Photo</label>
-                <PhotoUploadBox photoUrl={storyPhotoUrl} onChange={setStoryPhotoUrl} hint="JPG or PNG" />
-              </div>
-              <div className="field-group">
-                <label className="field-label">Caption / story</label>
-                <textarea className="textarea" placeholder="Share a moment from this visit…" value={caption} onChange={e => setCaption(e.target.value)} />
-              </div>
-            </>
-          )}
         </div>
 
         <div className="wizard-foot">
@@ -1659,9 +1438,9 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
           <div style={{ display:"flex", gap:10 }}>
             {step > 0 && (
               <button className="btn btn-secondary" onClick={() => {
-                if (step === 1) saveFeedback(true);
-                else if (step === 2) saveComplaints(true);
-                else if (step === 3) saveStory(true);
+                if (step === 1) saveComplaints(true);
+                else if (step === 2) saveStory(true);
+                else if (step === 3) saveFeedback(true);
               }}>Skip for now</button>
             )}
             {step === 0 && (
@@ -1670,16 +1449,18 @@ function VisitWizard({ visit, startStep, onUpdate, onDone, onExit, showToast }) 
               </button>
             )}
             {step === 1 && (
-              <button className="btn btn-primary" onClick={() => saveFeedback(false)}>Next <ChevronRight size={15} /></button>
-            )}
-            {step === 2 && (
               <button className="btn btn-primary" onClick={() => saveComplaints(false)} disabled={hasComplaints === null}>
                 Next <ChevronRight size={15} />
               </button>
             )}
-            {step === 3 && (
+            {step === 2 && (
               <button className="btn btn-primary" onClick={() => saveStory(false)}>
                 <Send size={14} /> Post to feed
+              </button>
+            )}
+            {step === 3 && (
+              <button className="btn btn-primary" onClick={() => saveFeedback(false)}>
+                <Check size={15} /> Finish visit
               </button>
             )}
           </div>

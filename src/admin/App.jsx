@@ -1,205 +1,23 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
-  MapPin, X, Check, AlertTriangle, Search, ArrowLeft, CheckCircle2,
-  Users, TrendingUp, ShieldAlert, Building2,
-  AlertCircle, CheckSquare, Hourglass, UserCheck, Plus, Trash2, Edit3,
-  Inbox, RefreshCw, LogOut
+  X, Check, Search, Users, ShieldAlert, Building2, AlertCircle, CheckSquare, Hourglass, UserCheck, Radar,
+  Plus, Edit3, Inbox, RefreshCw, MapPin, MessageCircle, TrendingUp, CheckCircle2, ChevronDown, ChevronUp, Trash2,
 } from "lucide-react";
 import { usePersistedCollection } from "../lib/usePersistedCollection";
 import { makeId } from "../lib/ids";
 import { useTheme } from "../lib/theme";
-import ThemeToggle from "../lib/ThemeToggle";
+import AppShell from "../lib/AppShell";
+import { Reveal } from "../lib/ui";
+import { Kpi } from "../staff/analytics/common";
+import { DEFAULT_SETTINGS, computeCoverage } from "../lib/offices";
+import { PersonDetails } from "../lib/PersonInfo";
+import { TERMS, lower } from "../lib/terms";
+import OfficesTab from "./OfficesTab";
+import NetworkHealth from "../staff/NetworkHealth";
+import BranchProfile from "../staff/BranchProfile";
 
-/* =========================================================================
-   DESIGN TOKENS & STYLES  (shared visual language with the staff app)
-   ========================================================================= */
-
-const STYLES = `
-  :root{
-    --magenta:#EC008C;
-    --magenta-dark:#B8006E;
-    --magenta-wash:#FDE9F4;
-    --magenta-wash-2:#FBD3E8;
-    --ink:#1D1E22;
-    --ink-soft:#5B5D68;
-    --ink-faint:#8B8D97;
-    --line:#E7E7EC;
-    --line-soft:#F0F0F4;
-    --paper:#F1F1F5;
-    --card:#FFFFFF;
-    --success:#1C8A54;
-    --success-wash:#E7F6EE;
-    --warning:#B7791F;
-    --warning-wash:#FBF1DF;
-    --danger:#D6394C;
-    --danger-wash:#FCE8EA;
-    --info:#2F6FED;
-    --info-wash:#EAF1FE;
-    --radius-lg:14px;
-    --radius-md:10px;
-    --radius-sm:7px;
-    --shadow-card: 0 1px 2px rgba(29,30,34,0.05), 0 1px 4px rgba(29,30,34,0.06);
-    --shadow-pop: 0 12px 28px rgba(29,30,34,0.18);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  }
-  [data-theme="dark"]{
-    --ink:#F2F2F5; --ink-soft:#B9BAC4; --ink-faint:#83848F;
-    --line:#33343C; --line-soft:#2A2B32; --paper:#141419; --card:#1D1E24;
-    --magenta-wash:#3A1530; --magenta-wash-2:#4A1B3D;
-    --success-wash:#123423; --warning-wash:#3A2D0F; --danger-wash:#3A1418; --info-wash:#122A44;
-    --shadow-card: 0 1px 2px rgba(0,0,0,0.35), 0 4px 14px rgba(0,0,0,0.4);
-    --shadow-pop: 0 12px 32px rgba(0,0,0,0.6);
-  }
-  html, body{ margin:0; padding:0; background:var(--paper); }
-  #root{ min-height:100vh; background:var(--paper); }
-  .fvt{ background:var(--paper); color:var(--ink); min-height:100vh; font-family:'Inter',sans-serif; }
-  .fvt *{ box-sizing:border-box; }
-  .mono{ font-family:'IBM Plex Mono','SF Mono',monospace; letter-spacing:-0.01em; }
-
-  .theme-toggle{ width:32px;height:32px;border-radius:999px;border:1px solid var(--line); background:var(--card);
-                 color:var(--ink-soft); display:flex;align-items:center;justify-content:center; cursor:pointer; flex-shrink:0; }
-  .theme-toggle:hover{ background:var(--line-soft); }
-
-  /* ---------- Login ---------- */
-  .login-screen{ min-height:100vh; display:flex; align-items:center; justify-content:center;
-                 background:linear-gradient(160deg, var(--paper) 0%, var(--magenta-wash) 130%); padding:24px; }
-  .login-card{ width:100%; max-width:380px; background:var(--card); border:1px solid var(--line);
-               border-radius:var(--radius-lg); box-shadow:var(--shadow-pop); padding:36px 30px 28px; text-align:center; }
-  .login-logo{ width:44px; height:44px; border-radius:12px; background:var(--magenta);
-               display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
-  .login-title{ font-size:19px; font-weight:750; margin:0; }
-  .login-sub{ font-size:12px; color:var(--ink-faint); margin:4px 0 0; }
-  .login-input-wrap{ position:relative; text-align:left; margin-top:16px; }
-  .login-input-icon{ position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--ink-faint); pointer-events:none; }
-  .login-input.input{ padding-left:36px; }
-  .login-error{ background:var(--danger-wash); color:var(--danger); font-size:12px; font-weight:650; padding:9px 12px; border-radius:8px; margin-top:16px; text-align:left; }
-  .login-footer{ font-size:11px; color:var(--ink-faint); margin:20px 0 0; }
-
-  /* ---------- Nav ---------- */
-  .nav{ position:sticky; top:0; z-index:40; background:var(--card); border-bottom:1px solid var(--line);
-        display:flex; align-items:center; justify-content:space-between; padding:12px 20px; flex-wrap:wrap; gap:10px; }
-  .nav-left{ display:flex; align-items:center; gap:10px; }
-  .nav-logo{ width:34px; height:34px; border-radius:99px; background:var(--magenta);
-             display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-  .nav-title{ font-weight:700; font-size:15px; letter-spacing:-0.01em; }
-  .nav-sub{ font-size:11px; color:var(--ink-faint); margin-top:-1px; }
-  .nav-tabs{ display:flex; align-items:center; gap:2px; flex-wrap:wrap; }
-  .nav-tab{ display:flex; align-items:center; gap:6px; padding:7px 12px; border-radius:8px; font-size:12.5px;
-            font-weight:650; color:var(--ink-soft); cursor:pointer; border:none; background:transparent; }
-  .nav-tab.active{ background:var(--ink); color:var(--card); }
-  .avatar{ width:30px; height:30px; border-radius:999px; background:var(--magenta-wash-2); color:var(--magenta-dark);
-           display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; }
-
-  .page{ max-width:1160px; margin:0 auto; padding:28px 20px 60px; }
-
-  h1.h-title{ font-size:22px; font-weight:750; letter-spacing:-0.02em; margin:0; }
-  .h-eyebrow{ font-size:11.5px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:var(--magenta); margin:0 0 4px; }
-  .h-desc{ color:var(--ink-soft); font-size:13.5px; margin:4px 0 0; }
-
-  .btn{ display:inline-flex; align-items:center; justify-content:center; gap:7px; border:none; cursor:pointer;
-        font-weight:650; font-size:13px; border-radius:99px; padding:8px 14px; transition:transform .06s ease; }
-  .btn:active{ transform:scale(0.97); }
-  .btn-primary{ background:var(--magenta); color:#fff; }
-  .btn-primary:hover{ background:var(--magenta-dark); }
-  .btn-secondary{ background:var(--card); color:var(--ink); border:1px solid var(--line); }
-  .btn-secondary:hover{ background:var(--line-soft); }
-  .btn-ghost{ background:transparent; color:var(--ink-soft); }
-  .btn-danger{ background:var(--danger); color:#fff; }
-  .btn-sm{ padding:6px 10px; font-size:12px; border-radius:8px; }
-  .btn-block{ width:100%; }
-  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
-
-  .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-lg); box-shadow:var(--shadow-card); }
-  .card-pad{ padding:18px; }
-
-  .stat-row{ display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:28px; }
-  .stat-card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-md); padding:14px 16px; }
-  .stat-num{ font-size:22px; font-weight:750; letter-spacing:-0.02em; }
-  .stat-label{ font-size:11.5px; color:var(--ink-faint); font-weight:600; margin-top:2px; }
-
-  .admin-section{ margin-bottom:32px; }
-  .section-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; border-bottom:1px solid var(--line); padding-bottom:8px; flex-wrap:wrap; gap:8px; }
-  .section-title{ font-size:15px; font-weight:750; display:flex; align-items:center; gap:8px; }
-  .badge-count{ font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; background:var(--line-soft); color:var(--ink); }
-
-  table.ctable{ width:100%; border-collapse:collapse; }
-  .ctable th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:0.04em; color:var(--ink-faint); font-weight:700; padding:0 12px 10px; }
-  .ctable td{ padding:12px; font-size:13px; border-top:1px solid var(--line-soft); vertical-align:middle; }
-  .ctable tbody tr:hover td{ background:var(--paper); }
-  .ctable-wrap{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-card); padding-top:12px; overflow-x:auto; }
-
-  .status-pill{ font-size:10.5px; font-weight:750; padding:4px 9px; border-radius:999px; white-space:nowrap; }
-  .status-Open{ background:var(--danger-wash); color:var(--danger); }
-  .status-InProgress{ background:var(--info-wash); color:var(--info); }
-  .status-Resolved{ background:var(--success-wash); color:var(--success); }
-
-  .urgency-badge{ font-size:10px; font-weight:750; padding:3px 8px; border-radius:6px; text-transform:uppercase; }
-  .urgency-Low{ background:var(--success-wash); color:var(--success); }
-  .urgency-Medium{ background:var(--warning-wash); color:var(--warning); }
-  .urgency-High{ background:var(--danger-wash); color:var(--danger); }
-  .source-badge{ font-size:10px; font-weight:750; padding:3px 8px; border-radius:6px; text-transform:uppercase; background:var(--line-soft); color:var(--ink-soft); }
-  .role-badge{ font-size:10px; font-weight:700; padding:3px 8px; border-radius:6px; background:var(--magenta-wash); color:var(--magenta-dark); margin-right:4px; display:inline-block; }
-  .type-badge{ font-size:10px; font-weight:750; padding:3px 8px; border-radius:6px; text-transform:uppercase; }
-  .type-assignment{ background:var(--info-wash); color:var(--info); }
-  .type-reminder{ background:var(--warning-wash); color:var(--warning); }
-  .type-escalation{ background:var(--danger-wash); color:var(--danger); }
-  .type-extension{ background:var(--magenta-wash); color:var(--magenta-dark); }
-
-  .modal-veil{ position:fixed; inset:0; background:rgba(20,20,24,0.44); display:flex; align-items:flex-start; justify-content:center;
-               padding:40px 16px; z-index:100; overflow-y:auto; }
-  .modal-box{ background:var(--card); border-radius:16px; width:100%; max-width:620px; box-shadow:var(--shadow-pop); }
-  .modal-head{ padding:20px 22px; border-bottom:1px solid var(--line-soft); display:flex; justify-content:space-between; align-items:flex-start; }
-  .modal-body{ padding:22px; }
-  .modal-close{ background:var(--line-soft); border:none; width:28px; height:28px; border-radius:999px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--ink-soft); flex-shrink:0; }
-
-  .field-group{ margin-bottom:16px; }
-  .field-label{ font-size:12.5px; font-weight:650; color:var(--ink); margin-bottom:6px; display:block; }
-  .input, .select, .textarea{ width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 12px; font-size:13px;
-        font-family:inherit; background:var(--card); color:var(--ink); }
-  .textarea{ resize:vertical; min-height:80px; }
-  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  .checkbox-row{ display:flex; gap:16px; align-items:center; }
-  .checkbox-row label{ display:flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer; }
-
-  .auto-assign-box{ background:var(--magenta-wash); border:1px solid var(--magenta-wash-2); border-radius:9px; padding:10px 12px; font-size:12px; color:var(--magenta-dark); margin-top:6px; }
-
-  .timeline{ margin-top:6px; }
-  .tl-item{ display:flex; gap:12px; padding-bottom:14px; position:relative; }
-  .tl-item:last-child{ padding-bottom:0; }
-  .tl-dot-wrap{ display:flex; flex-direction:column; align-items:center; }
-  .tl-dot{ width:9px; height:9px; border-radius:999px; background:var(--magenta); margin-top:4px; flex-shrink:0; }
-  .tl-bar{ width:2px; flex:1; background:var(--line); margin-top:2px; }
-  .tl-label{ font-size:12.5px; font-weight:700; }
-  .tl-time{ font-size:11px; color:var(--ink-faint); }
-
-  .toast{ position:fixed; bottom:26px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--card);
-          padding:12px 20px; border-radius:10px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px;
-          box-shadow:var(--shadow-pop); z-index:200; max-width:90vw; }
-  .empty-state{ padding:24px; text-align:center; color:var(--ink-faint); font-size:13px; }
-
-  @media (max-width: 720px){
-    .page{ padding:18px 12px 60px; }
-    .nav{ padding:10px 12px; }
-    .nav-sub{ display:none; }
-    .nav-title{ font-size:14px; }
-    .nav-tab{ padding:7px 9px; font-size:11.5px; }
-    h1.h-title{ font-size:19px; }
-    .stat-row{ grid-template-columns:repeat(2,1fr); gap:10px; }
-    .field-row{ grid-template-columns:1fr; }
-    .modal-veil{ padding:0; align-items:flex-end; }
-    .modal-box{ max-width:100%; width:100%; border-radius:16px 16px 0 0; max-height:92vh; overflow-y:auto; }
-    .ctable th, .ctable td{ padding:8px; font-size:12px; }
-    .login-card{ padding:28px 20px 22px; max-width:100%; }
-  }
-
-  /* Elements with box-shadow, promoted to their own compositing layer — fixes
-     the well-known iOS Safari bug where shadow+radius elements flicker
-     (repaint) during scroll instead of staying put. */
-  .card, .login-card, .ctable-wrap, .modal-box, .stat-card{
-    -webkit-transform:translateZ(0); transform:translateZ(0);
-    -webkit-backface-visibility:hidden; backface-visibility:hidden;
-  }
-`;
+/* The admin console shares the staff app's design system (src/styles/brac.css)
+   and navigation shell, so both sides of the product look and feel the same. */
 
 /* =========================================================================
    HELPERS
@@ -229,6 +47,7 @@ async function refetch(name, setter) {
 }
 
 const isOverdue = (c) => c.status === "In Progress" && c.deadline && new Date(c.deadline) < new Date();
+const URGENCY_RANK = { High: 0, Medium: 1, Low: 2 };
 
 /* =========================================================================
    MAIN APP
@@ -249,9 +68,9 @@ export default function App() {
     window.location.href = "/";
   };
 
-  // Sign-in now lives on the unified landing page ("/"). No valid admin
-  // session here (never logged in, or an email that no longer matches an
-  // admin account) bounces back there instead of showing a login form.
+  // Sign-in lives on the unified landing page ("/"). No valid admin session
+  // here (never logged in, or an email that no longer matches an admin
+  // account) bounces back there instead of showing a login form.
   useEffect(() => {
     if (!adminUsersLoaded) return;
     if (!currentAdmin) {
@@ -264,17 +83,13 @@ export default function App() {
   if (!adminUsersLoaded || !currentAdmin) {
     return (
       <div className="fvt">
-        <style>{STYLES}</style>
-        <div className="login-screen">
-          <div className="login-logo"><ShieldAlert size={20} color="#fff" /></div>
-        </div>
+        <div className="session-loading"><div className="brand-mark"><ShieldAlert size={20} /></div></div>
       </div>
     );
   }
 
   return (
     <div className="fvt">
-      <style>{STYLES}</style>
       <AdminShell theme={theme} toggleTheme={toggleTheme} onLogout={handleLogout} currentAdmin={currentAdmin} />
     </div>
   );
@@ -284,27 +99,20 @@ export default function App() {
    SHELL (tabs + top nav, shared across all admin pages)
    ========================================================================= */
 
-function adminInitials(name) {
-  return (name || "AD")
-    .split(" ")
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
 function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
   const [tab, setTab] = useState("queue");
   const [toast, setToast] = useState(null);
   const showToast = (msg) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3500);
+    setTimeout(() => setToast(null), 3800);
   };
 
   const [visits, setVisits] = usePersistedCollection("visits", []);
   const [departments, setDepartments] = usePersistedCollection("departments", []);
   const [employees, setEmployees] = usePersistedCollection("employees", []);
   const [emailLog, setEmailLog] = usePersistedCollection("emailLog", []);
+  const [offices, setOffices] = usePersistedCollection("offices", []);
+  const [settings, setSettings] = usePersistedCollection("settings", DEFAULT_SETTINGS);
 
   const complaints = useMemo(
     () =>
@@ -314,6 +122,8 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
           visitId: v.id,
           location: v.location,
           visitDate: v.date,
+          visitReason: v.reason,
+          district: v.region,
         }))
       ),
     [visits]
@@ -323,58 +133,66 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
     await Promise.all([refetch("visits", setVisits), refetch("emailLog", setEmailLog)]);
   };
 
+  // badge on the Complaints tab: things waiting on an admin
+  const needsAction = complaints.filter((c) => c.status === "Open" || (c.escalated && c.status !== "Resolved")).length;
+
+  // Network health / coverage lives here (admin-only for now — see src/lib/features.js)
+  const target = settings?.visitTargetDays || DEFAULT_SETTINGS.visitTargetDays;
+  const coverage = useMemo(() => computeCoverage(offices, visits, target), [offices, visits, target]);
+  const [branchKey, setBranchKey] = useState(null);
+  const branchRow = branchKey ? coverage.find((o) => o.key === branchKey) : null;
+  const openBranch = (office) => { setBranchKey(office.key); setTab("branch"); window.scrollTo({ top: 0 }); };
+
+  const tabs = [
+    { key: "queue", label: "Complaints", short: "Complaints", icon: MessageCircle, count: needsAction },
+    { key: "network", label: "Network health", short: "Network", icon: Radar },
+    { key: "departments", label: TERMS.units, short: TERMS.units, icon: Building2 },
+    { key: "employees", label: "Employees", short: "People", icon: Users },
+    { key: "offices", label: "Offices", short: "Offices", icon: MapPin },
+    { key: "emails", label: "Sent emails", short: "Emails", icon: Inbox },
+  ];
+
   return (
     <>
-      <div className="nav">
-        <div className="nav-left">
-          <div className="nav-logo"><MapPin size={18} color="#fff" /></div>
-          <div>
-            <div className="nav-title">Field Visit Tracker</div>
-            <div className="nav-sub">BRAC Microfinance · Admin Console</div>
-          </div>
-        </div>
-        <div className="nav-tabs">
-          <button className={`nav-tab ${tab === "queue" ? "active" : ""}`} onClick={() => setTab("queue")}>
-            <TrendingUp size={14} /> Complaints
-          </button>
-          <button className={`nav-tab ${tab === "departments" ? "active" : ""}`} onClick={() => setTab("departments")}>
-            <Building2 size={14} /> Departments
-          </button>
-          <button className={`nav-tab ${tab === "employees" ? "active" : ""}`} onClick={() => setTab("employees")}>
-            <Users size={14} /> Employees
-          </button>
-          <button className={`nav-tab ${tab === "emails" ? "active" : ""}`} onClick={() => setTab("emails")}>
-            <Inbox size={14} /> Sent Emails
-          </button>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          <div className="avatar" title={currentAdmin.name}>{adminInitials(currentAdmin.name)}</div>
-          <button className="btn btn-ghost btn-sm" onClick={onLogout}><LogOut size={14} /> Log out</button>
-        </div>
-      </div>
-
-      <div className="page">
+      <AppShell
+        theme={theme} onToggleTheme={toggleTheme} brandSub="BRAC · Admin Console"
+        tabs={tabs} active={tab === "branch" ? "network" : tab} pageKey={tab} onTab={setTab}
+        user={currentAdmin.name} userSub="Administrator" onLogout={onLogout}
+      >
         {tab === "queue" && (
-          <ComplaintsTab
-            complaints={complaints}
-            departments={departments}
-            employees={employees}
-            showToast={showToast}
-            onRefresh={refreshAfterAction}
-          />
+          <ComplaintsTab complaints={complaints} departments={departments} employees={employees} showToast={showToast} onRefresh={refreshAfterAction} />
+        )}
+        {tab === "network" && <NetworkHealth visits={visits} offices={offices} settings={settings} onOpenBranch={openBranch} />}
+        {tab === "branch" && branchRow && (
+          <BranchProfile office={branchRow} coverageRows={coverage} onBack={() => setTab("network")} canRegister={false} />
         )}
         {tab === "departments" && (
-          <DepartmentsTab departments={departments} setDepartments={setDepartments} showToast={showToast} />
+          <DepartmentsTab departments={departments} setDepartments={setDepartments} employees={employees} complaints={complaints} showToast={showToast} />
         )}
         {tab === "employees" && (
           <EmployeesTab employees={employees} setEmployees={setEmployees} departments={departments} showToast={showToast} />
         )}
+        {tab === "offices" && (
+          <OfficesTab offices={offices} setOffices={setOffices} visits={visits} setVisits={setVisits} settings={settings} setSettings={setSettings} showToast={showToast} />
+        )}
         {tab === "emails" && <SentEmailsTab emailLog={emailLog} />}
-      </div>
+      </AppShell>
 
       {toast && <div className="toast"><Check size={15} /> {toast}</div>}
     </>
+  );
+}
+
+function PageHead({ eyebrow, title, desc, children }) {
+  return (
+    <div className="page-head">
+      <div>
+        <p className="h-eyebrow">{eyebrow}</p>
+        <h1 className="h-title">{title}</h1>
+        {desc && <p className="h-desc">{desc}</p>}
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -385,6 +203,9 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
 function ComplaintsTab({ complaints, departments, employees, showToast, onRefresh }) {
   const [selected, setSelected] = useState(null);
   const [running, setRunning] = useState(false);
+  const [query, setQuery] = useState("");
+  const [urgency, setUrgency] = useState("all");
+  const [showResolved, setShowResolved] = useState(false);
 
   const stats = useMemo(() => {
     const unassigned = complaints.filter((c) => c.status === "Open").length;
@@ -392,13 +213,23 @@ function ComplaintsTab({ complaints, departments, employees, showToast, onRefres
     const overdueNotEscalated = complaints.filter((c) => isOverdue(c) && !c.escalated).length;
     const inProgress = complaints.filter((c) => c.status === "In Progress").length;
     const resolved = complaints.filter((c) => c.status === "Resolved").length;
-    return { unassigned, escalated, overdueNotEscalated, inProgress, resolved };
+    return { unassigned, escalated, overdueNotEscalated, inProgress, resolved, rate: complaints.length ? Math.round((resolved / complaints.length) * 100) : 0 };
   }, [complaints]);
 
-  const unassignedList = complaints.filter((c) => c.status === "Open");
-  const escalatedList = complaints.filter((c) => c.escalated && c.status !== "Resolved");
-  const inProgressList = complaints.filter((c) => c.status === "In Progress" && !c.escalated);
-  const resolvedList = complaints.filter((c) => c.status === "Resolved");
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return complaints.filter((c) =>
+      (urgency === "all" || c.urgency === urgency) &&
+      (!q || `${c.id} ${c.visitId} ${c.location} ${c.department} ${c.unit || ""} ${c.assignedTo} ${c.filedBy} ${c.description} ${Object.values(c.person || {}).join(" ")}`.toLowerCase().includes(q))
+    );
+  }, [complaints, query, urgency]);
+
+  const byUrgency = (a, b) => (URGENCY_RANK[a.urgency] ?? 3) - (URGENCY_RANK[b.urgency] ?? 3) || (b.visitDate || "").localeCompare(a.visitDate || "");
+  const unassignedList = visible.filter((c) => c.status === "Open").sort(byUrgency);
+  const escalatedList = visible.filter((c) => c.escalated && c.status !== "Resolved").sort((a, b) => new Date(a.deadline || 0) - new Date(b.deadline || 0));
+  const inProgressList = visible.filter((c) => c.status === "In Progress" && !c.escalated).sort((a, b) => new Date(a.deadline || 0) - new Date(b.deadline || 0));
+  const resolvedList = visible.filter((c) => c.status === "Resolved").sort((a, b) => new Date(b.resolvedAt || 0) - new Date(a.resolvedAt || 0));
+  const resolvedShown = showResolved ? resolvedList : resolvedList.slice(0, 8);
 
   const handleRunCheck = async () => {
     setRunning(true);
@@ -414,17 +245,13 @@ function ComplaintsTab({ complaints, departments, employees, showToast, onRefres
   };
 
   return (
-    <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 22 }}>
-        <div>
-          <p className="h-eyebrow">Administrative Overview</p>
-          <h1 className="h-title">Complaints Management Center</h1>
-          <p className="h-desc">Assign complaints to each department's fixer, set deadlines, and track escalations — all sourced live from the visits database.</p>
-        </div>
-        <button className="btn btn-secondary" onClick={handleRunCheck} disabled={running}>
-          <RefreshCw size={14} /> {running ? "Checking…" : "Run deadline check now"}
+    <div className="page">
+      <PageHead eyebrow="Administrative overview" title="Complaints center"
+        desc="Assign complaints to each unit's fixer, set deadlines, and track escalations — all sourced live from the visits database.">
+        <button className="btn btn-secondary btn-sm" onClick={handleRunCheck} disabled={running}>
+          <RefreshCw size={14} className={running ? "spin" : ""} /> {running ? "Checking…" : "Run deadline check"}
         </button>
-      </div>
+      </PageHead>
 
       {complaints.length === 0 && (
         <div className="card empty-state" style={{ marginBottom: 28 }}>
@@ -432,38 +259,54 @@ function ComplaintsTab({ complaints, departments, employees, showToast, onRefres
         </div>
       )}
 
-      <div className="admin-section">
-        <div className="section-header">
-          <div className="section-title"><TrendingUp size={17} /> Dashboard Stats</div>
+      <div className="kpi-grid" style={{ marginBottom: 20 }}>
+        <Reveal i={0}><Kpi icon={AlertCircle} tone="red" label="To be assigned" value={stats.unassigned} /></Reveal>
+        <Reveal i={1}><Kpi icon={ShieldAlert} tone="red" label="Escalated" value={stats.escalated} /></Reveal>
+        <Reveal i={2}><Kpi icon={Hourglass} tone="amber" label="Overdue · escalation pending" value={stats.overdueNotEscalated} /></Reveal>
+        <Reveal i={3}><Kpi icon={TrendingUp} tone="blue" label="In progress" value={stats.inProgress} /></Reveal>
+        <Reveal i={4}><Kpi icon={CheckCircle2} tone="green" label="Resolved" value={stats.resolved} /></Reveal>
+        <Reveal i={5}><Kpi icon={CheckSquare} tone="green" label="Resolution rate" value={stats.rate} suffix="%" /></Reveal>
+      </div>
+
+      <div className="toolbar">
+        <div className="search-box">
+          <Search size={16} />
+          <input className="input" placeholder="Search by ID, branch, unit, team, person…" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
-        <div className="stat-row">
-          <div className="stat-card"><div className="stat-num">{stats.unassigned}</div><div className="stat-label">To Be Assigned</div></div>
-          <div className="stat-card"><div className="stat-num" style={{ color: "var(--danger)" }}>{stats.escalated}</div><div className="stat-label">Escalated</div></div>
-          <div className="stat-card"><div className="stat-num" style={{ color: "var(--warning)" }}>{stats.overdueNotEscalated}</div><div className="stat-label">Overdue (pending escalation email)</div></div>
-          <div className="stat-card"><div className="stat-num" style={{ color: "var(--info)" }}>{stats.inProgress}</div><div className="stat-label">In Progress</div></div>
-          <div className="stat-card"><div className="stat-num" style={{ color: "var(--success)" }}>{stats.resolved}</div><div className="stat-label">Resolved</div></div>
+        <div className="filter-chips">
+          {[["all", "All urgency"], ["High", "High"], ["Medium", "Medium"], ["Low", "Low"]].map(([k, label]) => (
+            <button key={k} className={`filter-chip ${urgency === k ? "active" : ""}`} onClick={() => setUrgency(k)}>{label}</button>
+          ))}
         </div>
       </div>
 
-      <Section title="To Be Assigned" icon={<AlertCircle size={17} />} color="var(--danger)" count={unassignedList.length}>
+      <Section title="To be assigned" icon={<AlertCircle size={17} />} color="var(--danger)" count={unassignedList.length}>
         <ComplaintTable items={unassignedList} onSelect={setSelected} emptyMsg="No unassigned complaints." actionLabel="Assign" />
       </Section>
 
-      <Section title="Escalated — Awaiting Extension" icon={<ShieldAlert size={17} />} color="var(--danger)" count={escalatedList.length}>
-        <ComplaintTable items={escalatedList} onSelect={setSelected} emptyMsg="Nothing currently escalated." actionLabel="Grant Extension" highlightDeadline />
+      <Section title="Escalated — awaiting extension" icon={<ShieldAlert size={17} />} color="var(--danger)" count={escalatedList.length}>
+        <ComplaintTable items={escalatedList} onSelect={setSelected} emptyMsg="Nothing currently escalated." actionLabel="Grant extension" highlightDeadline />
       </Section>
 
-      <Section title="In Progress" icon={<Hourglass size={17} />} count={inProgressList.length}>
+      <Section title="In progress" icon={<Hourglass size={17} />} count={inProgressList.length}>
         <ComplaintTable items={inProgressList} onSelect={setSelected} emptyMsg="Nothing in progress." actionLabel="View" />
       </Section>
 
       <Section title="Resolved" icon={<CheckSquare size={17} />} color="var(--success)" count={resolvedList.length}>
-        <ComplaintTable items={resolvedList} onSelect={setSelected} emptyMsg="Nothing resolved yet." actionLabel="View" />
+        <ComplaintTable items={resolvedShown} onSelect={setSelected} emptyMsg="Nothing resolved yet." actionLabel="View" />
+        {resolvedList.length > 8 && (
+          <div style={{ textAlign: "center", marginTop: 14 }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowResolved((s) => !s)}>
+              {showResolved ? <>Show fewer <ChevronUp size={14} /></> : <>Show all {resolvedList.length} <ChevronDown size={14} /></>}
+            </button>
+          </div>
+        )}
       </Section>
 
       {selected && (
         <ComplaintModal
-          complaint={selected}
+          // re-resolve against live data so the modal reflects what just changed
+          complaint={complaints.find((c) => c.id === selected.id && c.visitId === selected.visitId) || selected}
           departments={departments}
           employees={employees}
           onClose={() => setSelected(null)}
@@ -471,19 +314,19 @@ function ComplaintsTab({ complaints, departments, employees, showToast, onRefres
           onRefresh={onRefresh}
         />
       )}
-    </>
+    </div>
   );
 }
 
 function Section({ title, icon, color, count, children }) {
   return (
-    <div className="admin-section">
+    <Reveal className="admin-section">
       <div className="section-header">
         <div className="section-title" style={color ? { color } : undefined}>{icon} {title}</div>
         <span className="badge-count" style={color ? { background: "transparent", color } : undefined}>{count}</span>
       </div>
       {children}
-    </div>
+    </Reveal>
   );
 }
 
@@ -492,27 +335,33 @@ function ComplaintTable({ items, onSelect, emptyMsg, actionLabel, highlightDeadl
 
   return (
     <div className="ctable-wrap">
-      <table className="ctable">
+      <table className="ctable stack">
         <thead>
           <tr>
-            <th>ID</th><th>Visit</th><th>Dept</th><th>Description</th><th>Urgency</th>
-            <th>Deadline</th><th>Assigned To</th><th style={{ textAlign: "right" }}>Action</th>
+            <th>ID</th><th>Branch</th><th>{TERMS.unit} / {lower(TERMS.team)}</th><th>Description</th><th>Urgency</th>
+            <th>Deadline</th><th>Assigned to</th><th style={{ textAlign: "right" }}>Action</th>
           </tr>
         </thead>
         <tbody>
           {items.map((c) => (
-            <tr key={c.id}>
-              <td className="mono" style={{ fontWeight: 700 }}>{c.id}</td>
-              <td className="mono" style={{ color: "var(--ink-faint)" }}>{c.visitId}</td>
-              <td>{c.department || "Unassigned"}{c.source && <span className="source-badge" style={{ marginLeft: 6 }}>{c.source}</span>}</td>
-              <td style={{ maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.description}</td>
-              <td><span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span></td>
-              <td className="mono" style={{ color: highlightDeadline ? "var(--danger)" : "inherit", fontWeight: highlightDeadline ? 700 : 400 }}>
+            <tr key={`${c.visitId}-${c.id}`} style={{ cursor: "pointer" }} onClick={() => onSelect(c)}>
+              <td data-label="ID" className="mono" style={{ fontWeight: 700 }}>{c.id}</td>
+              <td data-label="Branch"><div className="cell-main">{c.location || "—"}</div><div className="cell-sub mono">{c.visitId}</div></td>
+              <td data-label={`${TERMS.unit} / ${lower(TERMS.team)}`}>
+                <div className="cell-main">{c.department || "Unassigned"}{c.source && <span className="source-badge" style={{ marginLeft: 6 }}>{c.source}</span>}</div>
+                {c.unit && <div className="cell-sub">{c.unit}</div>}
+              </td>
+              <td data-label="Description">
+                <div className="cell-clip">{c.description}</div>
+                {c.person?.name && <div className="cell-sub">Raised by {c.person.name}</div>}
+              </td>
+              <td data-label="Urgency"><span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span></td>
+              <td data-label="Deadline" className="mono" style={{ color: highlightDeadline ? "var(--danger)" : "inherit", fontWeight: highlightDeadline ? 700 : 400 }}>
                 {c.deadline ? new Date(c.deadline).toLocaleString() : "Not set"}
               </td>
-              <td>{c.assignedTo || "Unassigned"}</td>
-              <td style={{ textAlign: "right" }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => onSelect(c)}>{actionLabel}</button>
+              <td data-label="Assigned to">{c.assignedTo || "Unassigned"}</td>
+              <td data-label="" style={{ textAlign: "right" }}>
+                <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); onSelect(c); }}>{actionLabel}</button>
               </td>
             </tr>
           ))}
@@ -522,8 +371,32 @@ function ComplaintTable({ items, onSelect, emptyMsg, actionLabel, highlightDeadl
   );
 }
 
+/** Filed → assigned → being fixed → resolved, at a glance. */
+function Journey({ c }) {
+  const resolved = c.status === "Resolved";
+  const escalated = c.escalated && !resolved;
+  const steps = [
+    { label: "Filed", done: true },
+    { label: "Assigned", done: !!c.assignedTo },
+    { label: escalated ? "Escalated" : "Being fixed", done: c.status === "In Progress" || resolved, alert: escalated },
+    { label: "Resolved", done: resolved },
+  ];
+  const now = steps.findIndex((s) => !s.done);
+  return (
+    <div className="journey" aria-label="Complaint progress">
+      {steps.map((s, i) => (
+        <div key={s.label} className={`jr-step ${s.done ? "done" : ""} ${resolved ? "all" : ""} ${i === now ? "now" : ""} ${s.alert ? "alert" : ""}`}>
+          <span className="jr-dot">{(s.done || s.alert) && <Check size={13} strokeWidth={3.2} />}</span>
+          {s.label}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ComplaintModal({ complaint: c, departments, employees, onClose, showToast, onRefresh }) {
   const [deptId, setDeptId] = useState(departments[0]?.id || "");
+  const [unitName, setUnitName] = useState("");
   const [days, setDays] = useState(3);
   const [extendDays, setExtendDays] = useState(2);
   const [busy, setBusy] = useState(false);
@@ -540,6 +413,7 @@ function ComplaintModal({ complaint: c, departments, employees, onClose, showToa
         visitId: c.visitId,
         complaintId: c.id,
         departmentId: isOther ? deptId : undefined,
+        unit: isOther ? unitName || undefined : undefined,
         days,
       });
       await onRefresh();
@@ -566,74 +440,97 @@ function ComplaintModal({ complaint: c, departments, employees, onClose, showToa
     }
   };
 
+  const meta = (label, value) => value ? (
+    <div className="meta-row"><span className="meta-k">{label}</span><span className="meta-v">{value}</span></div>
+  ) : null;
+
   return (
     <div className="modal-veil" onClick={onClose}>
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div>
             <span className="mono" style={{ fontSize: 12, color: "var(--ink-faint)" }}>{c.id}</span>
-            <h1 className="h-title" style={{ fontSize: 17, marginTop: 2 }}>Complaint</h1>
+            <h1 className="h-title" style={{ fontSize: 19, marginTop: 2 }}>Complaint</h1>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+              <StatusPill status={c.status} />
+              <span className={`urgency-badge urgency-${c.urgency}`}>{c.urgency}</span>
+              {c.escalated && c.status !== "Resolved" && <span className="type-badge type-escalation">Escalated</span>}
+            </div>
           </div>
-          <button className="modal-close" onClick={onClose}><X size={15} /></button>
+          <button className="modal-close" onClick={onClose} aria-label="Close"><X size={15} /></button>
         </div>
 
         <div className="modal-body">
-          <p style={{ fontSize: 13.5, lineHeight: 1.5, marginBottom: 16 }}>{c.description}</p>
+          <Journey c={c} />
+
+          <p style={{ fontSize: 14, lineHeight: 1.55, marginBottom: 16 }}>{c.description}</p>
 
           {c.photoUrl && (
-            <img src={c.photoUrl} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 10, marginBottom: 16 }} />
+            <img src={c.photoUrl} alt="" style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 14, marginBottom: 16 }} />
           )}
 
-          <div style={{ background: "var(--paper)", padding: 12, borderRadius: 8, marginBottom: 18, border: "1px solid var(--line)" }}>
-            <div style={{ fontSize: 12, color: "var(--ink-soft)" }}><strong>Filed By:</strong> {c.filedBy} {c.source && <span className="source-badge" style={{ marginLeft: 6 }}>{c.source}</span>}</div>
-            <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}><strong>Visit:</strong> <span className="mono">{c.visitId}</span> — {c.location} · {c.visitDate}</div>
-            <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}><strong>Status:</strong> <StatusPill status={c.status} /> {c.escalated && <span className="type-badge type-escalation" style={{ marginLeft: 6 }}>Escalated</span>}</div>
-            {c.assignedTo && <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}><strong>Assigned To:</strong> {c.assignedTo} ({c.department}) · Supervisor: {c.supervisor || "—"}</div>}
-            {c.deadline && <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 4 }}><strong>Current Deadline:</strong> {new Date(c.deadline).toLocaleString()}</div>}
+          <div className="meta-box">
+            {meta("Filed by", c.filedBy)}
+            {meta("Raised by", <PersonDetails kind={c.source} person={c.person} consent={c.consent} />)}
+            {meta("Visit", <><span className="mono">{c.visitId}</span> — {c.location} · {c.visitDate}</>)}
+            {meta("Visit reason", c.visitReason)}
+            {meta(TERMS.unit, c.department)}
+            {meta(TERMS.team, c.unit)}
+            {meta("Assigned to", c.assignedTo && <>{c.assignedTo} · supervisor {c.supervisor || "—"}</>)}
+            {meta("Deadline", c.deadline && new Date(c.deadline).toLocaleString())}
           </div>
 
           {c.status === "Open" && (
             <div className="card card-pad" style={{ background: "var(--paper)" }}>
-              <p className="field-label">Assign &amp; Set Deadline</p>
+              <p className="field-label">Assign &amp; set deadline</p>
 
               {isOther ? (
                 <div className="field-group">
-                  <label className="field-label">This complaint was filed as "Other" — choose the real department</label>
-                  <select className="select" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
+                  <label className="field-label">This complaint was filed as "Other" — choose the real {lower(TERMS.unit)}</label>
+                  <select className="select" value={deptId} onChange={(e) => { setDeptId(e.target.value); setUnitName(""); }}>
                     {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
+                  {(departments.find((d) => d.id === deptId)?.units || []).length > 0 && (
+                    <>
+                      <label className="field-label" style={{ marginTop: 12 }}>{TERMS.team} <span style={{ fontWeight: 500, color: "var(--ink-faint)" }}>(optional)</span></label>
+                      <select className="select" value={unitName} onChange={(e) => setUnitName(e.target.value)}>
+                        <option value="">{`No specific ${lower(TERMS.team)}`}</option>
+                        {departments.find((d) => d.id === deptId).units.map((u) => <option key={u.id}>{u.name}</option>)}
+                      </select>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="field-group">
-                  <label className="field-label">Department (from complaint)</label>
+                  <label className="field-label">{TERMS.unit} (from complaint)</label>
                   <input className="input" value={c.department} disabled />
                 </div>
               )}
 
               <div className="auto-assign-box">
-                <UserCheck size={14} style={{ display: "inline", marginRight: 6 }} />
+                <UserCheck size={15} style={{ flexShrink: 0 }} />
                 {previewFixer
-                  ? `Will assign to ${previewFixer.name} — the fixer for this department.`
-                  : "No fixer is set up in this department yet — add one under Employees first."}
+                  ? `Will assign to ${previewFixer.name} — the fixer for this ${lower(TERMS.unit)}.`
+                  : `No fixer is set up in this ${lower(TERMS.unit)} yet — add one under Employees first.`}
               </div>
 
               <div className="field-group" style={{ marginTop: 14 }}>
                 <label className="field-label">Time given to fix (days)</label>
                 <input type="number" min="1" max="60" className="input" value={days} onChange={(e) => setDays(e.target.value)} />
-                <p style={{ fontSize: 11, color: "var(--ink-faint)", marginTop: 6 }}>
+                <p style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 6 }}>
                   A reminder email goes out {Number(days) > 2 ? "48" : "24"} hours before this deadline; an escalation email goes to the supervisor automatically if it's missed.
                 </p>
               </div>
 
               <button className="btn btn-primary btn-block" onClick={handleAssign} disabled={busy || !previewFixer}>
-                Confirm Assignment &amp; Set Deadline
+                Confirm assignment &amp; set deadline
               </button>
             </div>
           )}
 
           {c.escalated && c.status !== "Resolved" && (
             <div className="card card-pad" style={{ background: "var(--danger-wash)", borderColor: "transparent" }}>
-              <p className="field-label" style={{ color: "var(--danger)" }}>Deadline Missed — Escalated</p>
+              <p className="field-label" style={{ color: "var(--danger)" }}>Deadline missed — escalated</p>
               <p style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 14 }}>
                 An automatic escalation email was already sent to <strong>{c.supervisor || "the supervisor"}</strong>. Once they tell you how much extra time to grant, enter it here — this restarts the reminder/escalation cycle against the new deadline.
               </p>
@@ -642,24 +539,23 @@ function ComplaintModal({ complaint: c, departments, employees, onClose, showToa
                 <input type="number" min="1" max="60" className="input" value={extendDays} onChange={(e) => setExtendDays(e.target.value)} />
               </div>
               <button className="btn btn-danger btn-block" onClick={handleExtend} disabled={busy}>
-                Grant Extension &amp; Notify Employee
+                Grant extension &amp; notify employee
               </button>
             </div>
           )}
 
-          {c.status === "In Progress" && !c.escalated && (
-            <div className="card card-pad" style={{ background: "var(--paper)" }}>
-              <p className="field-label">Activity</p>
-              <Timeline log={c.log} />
+          {c.status === "Resolved" && (
+            <div className="card card-pad" style={{ background: "var(--success-wash)", borderColor: "transparent", marginBottom: 14 }}>
+              <p className="field-label" style={{ color: "var(--success)" }}>Resolved</p>
+              <p style={{ fontSize: 12.5, color: "var(--ink-soft)", margin: 0 }}>
+                Resolved by <strong>{c.resolvedBy}</strong> on {c.resolvedAt ? new Date(c.resolvedAt).toLocaleString() : "—"}.
+              </p>
             </div>
           )}
 
-          {c.status === "Resolved" && (
-            <div className="card card-pad" style={{ background: "var(--success-wash)", borderColor: "transparent" }}>
-              <p className="field-label" style={{ color: "var(--success)" }}>Resolved</p>
-              <p style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 10 }}>
-                Resolved by <strong>{c.resolvedBy}</strong> on {c.resolvedAt ? new Date(c.resolvedAt).toLocaleString() : "—"}.
-              </p>
+          {c.log && c.log.length > 0 && (
+            <div style={{ marginTop: 18 }}>
+              <p className="field-label">Activity</p>
               <Timeline log={c.log} />
             </div>
           )}
@@ -698,65 +594,165 @@ function StatusPill({ status }) {
    TAB: DEPARTMENTS
    ========================================================================= */
 
-function DepartmentsTab({ departments, setDepartments, showToast }) {
+function DepartmentsTab({ departments, setDepartments, employees, complaints, showToast }) {
   const [name, setName] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState("");
+  const [openId, setOpenId] = useState(null); // department whose units are being edited
 
   const handleAdd = () => {
     if (!name.trim()) return;
-    setDepartments((ds) => [...ds, { id: makeId("DEPT"), name: name.trim() }]);
-    showToast(`Department "${name.trim()}" added.`);
+    if (departments.some((d) => d.name.toLowerCase() === name.trim().toLowerCase())) { showToast(`That ${lower(TERMS.unit)} already exists.`); return; }
+    setDepartments((ds) => [...ds, { id: makeId("DEPT"), name: name.trim(), units: [] }]);
+    showToast(`${TERMS.unit} "${name.trim()}" added.`);
     setName("");
   };
 
   const startEdit = (d) => { setEditingId(d.id); setEditingName(d.name); };
   const saveEdit = () => {
+    if (!editingName.trim()) return;
     setDepartments((ds) => ds.map((d) => (d.id === editingId ? { ...d, name: editingName.trim() } : d)));
     setEditingId(null);
   };
 
-  return (
-    <>
-      <div style={{ marginBottom: 22 }}>
-        <p className="h-eyebrow">Configuration</p>
-        <h1 className="h-title">Departments</h1>
-        <p className="h-desc">Complaints get routed to whichever department they name — or, for "Other," whichever one you pick.</p>
-      </div>
+  const rows = departments.map((d) => {
+    const team = employees.filter((e) => e.departmentId === d.id);
+    const mine = complaints.filter((c) => c.department === d.name);
+    return {
+      d,
+      fixer: team.find((e) => (e.roles || []).includes("fixer")),
+      team: team.length,
+      open: mine.filter((c) => c.status !== "Resolved").length,
+      resolved: mine.filter((c) => c.status === "Resolved").length,
+      unitCounts: Object.fromEntries((d.units || []).map((u) => [u.id, mine.filter((c) => c.unit === u.name).length])),
+    };
+  });
 
-      <div className="card card-pad" style={{ marginBottom: 20, maxWidth: 420 }}>
-        <label className="field-label">Add a department</label>
+  return (
+    <div className="page">
+      <PageHead eyebrow="Configuration" title={TERMS.units}
+        desc={`Complaints are filed against a ${lower(TERMS.unit)} and one of its ${lower(TERMS.teams)}. They are routed to that ${lower(TERMS.unit)}'s single fixer — or, for "Other," to whichever ${lower(TERMS.unit)} you pick when assigning.`} />
+
+      <Reveal className="card card-pad" style={{ marginBottom: 20, maxWidth: 460 }}>
+        <label className="field-label">Add a {lower(TERMS.unit)}</label>
         <div style={{ display: "flex", gap: 8 }}>
           <input className="input" placeholder="e.g. Legal" value={name} onChange={(e) => setName(e.target.value)}
                  onKeyDown={(e) => e.key === "Enter" && handleAdd()} />
           <button className="btn btn-primary" onClick={handleAdd}><Plus size={14} /> Add</button>
         </div>
-      </div>
+      </Reveal>
 
       <div className="ctable-wrap">
-        <table className="ctable">
-          <thead><tr><th>Name</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
+        <table className="ctable stack">
+          <thead><tr><th>{TERMS.unit}</th><th>{TERMS.teams}</th><th>Fixer</th><th>People</th><th>Open</th><th>Resolved</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
           <tbody>
-            {departments.map((d) => (
-              <tr key={d.id}>
-                <td>
-                  {editingId === d.id
-                    ? <input className="input" value={editingName} onChange={(e) => setEditingName(e.target.value)} style={{ maxWidth: 260 }} />
-                    : <strong>{d.name}</strong>}
-                </td>
-                <td style={{ textAlign: "right" }}>
-                  {editingId === d.id ? (
-                    <button className="btn btn-primary btn-sm" onClick={saveEdit}>Save</button>
-                  ) : (
-                    <button className="btn btn-secondary btn-sm" onClick={() => startEdit(d)}><Edit3 size={12} /> Rename</button>
-                  )}
-                </td>
-              </tr>
+            {rows.map(({ d, fixer, team, open, resolved, unitCounts }) => (
+              <React.Fragment key={d.id}>
+                <tr>
+                  <td data-label={TERMS.unit}>
+                    {editingId === d.id
+                      ? <input className="input" value={editingName} onChange={(e) => setEditingName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveEdit()} style={{ maxWidth: 260 }} autoFocus />
+                      : <strong>{d.name}</strong>}
+                  </td>
+                  <td data-label={TERMS.teams}><span className="pill pill-brand">{(d.units || []).length} {lower(TERMS.team)}{(d.units || []).length === 1 ? "" : "s"}</span></td>
+                  <td data-label="Fixer">{fixer ? fixer.name : <span className="pill pill-stale">No fixer yet</span>}</td>
+                  <td data-label="People">{team}</td>
+                  <td data-label="Open">{open > 0 ? <span className="pill pill-stale">{open}</span> : <span style={{ color: "var(--ink-faint)" }}>0</span>}</td>
+                  <td data-label="Resolved">{resolved}</td>
+                  <td data-label="" style={{ textAlign: "right" }}>
+                    <div className="row-actions">
+                      {editingId === d.id ? (
+                        <button className="btn btn-primary btn-sm" onClick={saveEdit}>Save</button>
+                      ) : (
+                        <>
+                          <button className="btn btn-secondary btn-sm" onClick={() => setOpenId(openId === d.id ? null : d.id)}>
+                            {openId === d.id ? <><ChevronUp size={13} /> {TERMS.teams}</> : <><ChevronDown size={13} /> {TERMS.teams}</>}
+                          </button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => startEdit(d)}><Edit3 size={12} /> Rename</button>
+                        </>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                {openId === d.id && (
+                  <tr className="expand-row">
+                    <td colSpan={7} data-label="">
+                      <UnitsEditor dept={d} counts={unitCounts} setDepartments={setDepartments} showToast={showToast} />
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
       </div>
-    </>
+    </div>
+  );
+}
+
+/** Add / rename / remove the units of one department. Complaints keep the unit name they were filed with. */
+function UnitsEditor({ dept, counts, setDepartments, showToast }) {
+  const [draft, setDraft] = useState("");
+  const [editing, setEditing] = useState(null); // { id, value }
+  const [confirmId, setConfirmId] = useState(null);
+  const units = dept.units || [];
+
+  const mutate = (fn) => setDepartments((ds) => ds.map((d) => (d.id === dept.id ? { ...d, units: fn(d.units || []) } : d)));
+  const taken = (n, exceptId) => units.some((u) => u.id !== exceptId && u.name.toLowerCase() === n.toLowerCase());
+
+  const add = () => {
+    const n = draft.trim();
+    if (!n) return;
+    if (taken(n)) { showToast(`${dept.name} already has a ${lower(TERMS.team)} called "${n}".`); return; }
+    mutate((us) => [...us, { id: makeId("UNIT"), name: n }]);
+    setDraft("");
+  };
+  const saveRename = () => {
+    const n = editing.value.trim();
+    if (!n) return;
+    if (taken(n, editing.id)) { showToast(`${dept.name} already has a ${lower(TERMS.team)} called "${n}".`); return; }
+    mutate((us) => us.map((u) => (u.id === editing.id ? { ...u, name: n } : u)));
+    setEditing(null);
+  };
+  const remove = (u) => {
+    if (confirmId !== u.id) { setConfirmId(u.id); return; }
+    mutate((us) => us.filter((x) => x.id !== u.id));
+    setConfirmId(null);
+    showToast(`${TERMS.team} "${u.name}" removed${counts[u.id] ? ` — its ${counts[u.id]} existing complaint(s) keep the name` : ""}.`);
+  };
+
+  return (
+    <div className="units-editor">
+      <p className="field-label" style={{ marginBottom: 10 }}>{TERMS.teams} in {dept.name}</p>
+      {units.length === 0 && <p style={{ fontSize: 12.5, color: "var(--ink-faint)", margin: "0 0 12px" }}>No {lower(TERMS.teams)} yet — complaints for this {lower(TERMS.unit)} will be filed without one.</p>}
+      <div className="unit-list">
+        {units.map((u) => (
+          <div className="unit-row" key={u.id}>
+            {editing?.id === u.id ? (
+              <>
+                <input className="input" value={editing.value} autoFocus onChange={(e) => setEditing({ id: u.id, value: e.target.value })}
+                       onKeyDown={(e) => { if (e.key === "Enter") saveRename(); if (e.key === "Escape") setEditing(null); }} />
+                <button className="btn btn-primary btn-sm" onClick={saveRename}>Save</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setEditing(null)}>Cancel</button>
+              </>
+            ) : (
+              <>
+                <span className="unit-name">{u.name}</span>
+                <span className="unit-count">{counts[u.id] || 0} complaint{counts[u.id] === 1 ? "" : "s"}</span>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setEditing({ id: u.id, value: u.name }); setConfirmId(null); }}><Edit3 size={12} /> Rename</button>
+                <button className={`btn btn-sm ${confirmId === u.id ? "btn-danger" : "btn-ghost"}`} onClick={() => remove(u)}>
+                  <Trash2 size={12} /> {confirmId === u.id ? "Confirm" : "Remove"}
+                </button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="unit-add">
+        <input className="input" placeholder={`New ${lower(TERMS.team)} name`} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <button className="btn btn-primary btn-sm" onClick={add}><Plus size={13} /> Add {lower(TERMS.team)}</button>
+      </div>
+    </div>
   );
 }
 
@@ -765,14 +761,14 @@ function DepartmentsTab({ departments, setDepartments, showToast }) {
    ========================================================================= */
 
 const ROLE_OPTIONS = ["field", "fixer", "supervisor", "management"];
+const emptyEmployeeForm = () => ({ name: "", phone: "", email: "", password: "", pin: "", departmentId: "", supervisorId: "", roles: [] });
 
 function EmployeesTab({ employees, setEmployees, departments, showToast }) {
   const [form, setForm] = useState(emptyEmployeeForm());
   const [editingId, setEditingId] = useState(null);
-
-  function emptyEmployeeForm() {
-    return { name: "", phone: "", email: "", password: "", pin: "", departmentId: "", supervisorId: "", roles: [] };
-  }
+  const [formOpen, setFormOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
 
   const toggleRole = (role) => {
     setForm((f) => ({
@@ -780,6 +776,8 @@ function EmployeesTab({ employees, setEmployees, departments, showToast }) {
       roles: f.roles.includes(role) ? f.roles.filter((r) => r !== role) : [...f.roles, role],
     }));
   };
+
+  const closeForm = () => { setEditingId(null); setForm(emptyEmployeeForm()); setFormOpen(false); };
 
   const handleSubmit = () => {
     if (!form.name.trim()) { showToast("Name is required."); return; }
@@ -805,112 +803,133 @@ function EmployeesTab({ employees, setEmployees, departments, showToast }) {
     }
     showToast(
       displacedFixer
-        ? `${form.name} is now the fixer for this department (${displacedFixer.name} was removed from that role).`
+        ? `${form.name} is now the fixer for this ${lower(TERMS.unit)} (${displacedFixer.name} was removed from that role).`
         : `${form.name} ${editingId ? "updated" : "added"}.`
     );
-    setForm(emptyEmployeeForm());
-    setEditingId(null);
+    closeForm();
   };
 
   const startEdit = (e) => {
     setEditingId(e.id);
+    setFormOpen(true);
     setForm({
       name: e.name || "", phone: e.phone || "", email: e.email || "", password: e.password || "",
       pin: e.pin || "", departmentId: e.departmentId || "", supervisorId: e.supervisorId || "", roles: e.roles || [],
     });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const supervisorOptions = employees.filter((e) => (e.roles || []).includes("supervisor"));
 
-  return (
-    <>
-      <div style={{ marginBottom: 22 }}>
-        <p className="h-eyebrow">Configuration</p>
-        <h1 className="h-title">Employees</h1>
-        <p className="h-desc">Add employees, assign them a department and supervisor, and tag them with roles.</p>
-      </div>
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return employees.filter((e) =>
+      (roleFilter === "all" || (e.roles || []).includes(roleFilter)) &&
+      (!q || `${e.name} ${e.email} ${e.phone} ${e.pin}`.toLowerCase().includes(q))
+    );
+  }, [employees, query, roleFilter]);
 
-      <div className="card card-pad" style={{ marginBottom: 24 }}>
-        <p className="field-label">{editingId ? "Edit employee" : "Add employee"}</p>
-        <div className="field-row">
-          <div className="field-group">
-            <label className="field-label">Name</label>
-            <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </div>
-          <div className="field-group">
-            <label className="field-label">Number</label>
-            <input className="input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          </div>
-        </div>
-        <div className="field-row">
-          <div className="field-group">
-            <label className="field-label">Email</label>
-            <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          </div>
-          <div className="field-group">
-            <label className="field-label">PIN</label>
-            <input className="input" value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value })} />
-          </div>
-        </div>
-        <div className="field-row">
-          <div className="field-group">
-            <label className="field-label">Password (for Fixer/Admin login)</label>
-            <input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-          </div>
-          <div className="field-group">
-            <label className="field-label">Department</label>
-            <select className="select" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
-              <option value="">—</option>
-              {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="field-row">
-          <div className="field-group">
-            <label className="field-label">Supervisor</label>
-            <select className="select" value={form.supervisorId} onChange={(e) => setForm({ ...form, supervisorId: e.target.value })}>
-              <option value="">—</option>
-              {supervisorOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div className="field-group">
-            <label className="field-label">Roles</label>
-            <div className="checkbox-row" style={{ height: 36 }}>
-              {ROLE_OPTIONS.map((r) => (
-                <label key={r}>
-                  <input type="checkbox" checked={form.roles.includes(r)} onChange={() => toggleRole(r)} /> {r}
-                </label>
-              ))}
+  return (
+    <div className="page">
+      <PageHead eyebrow="Configuration" title="Employees" desc={`Add employees, assign them a ${lower(TERMS.unit)} and supervisor, and tag them with roles.`}>
+        {!formOpen && <button className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}><Plus size={14} strokeWidth={2.6} /> Add employee</button>}
+      </PageHead>
+
+      {formOpen && (
+        <div className="card card-pad page-enter" style={{ marginBottom: 24 }}>
+          <p className="field-label">{editingId ? "Edit employee" : "Add employee"}</p>
+          <div className="field-row">
+            <div className="field-group">
+              <label className="field-label">Name</label>
+              <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
-            <p style={{ fontSize: 11, color: "var(--ink-faint)", marginTop: 6 }}>
-              Only one fixer per department — checking it here removes it from whoever had it.
-              "management" adds an Analytics dashboard to their staff app, on top of whatever else they can already do.
-            </p>
+            <div className="field-group">
+              <label className="field-label">Number</label>
+              <input className="input" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+          </div>
+          <div className="field-row">
+            <div className="field-group">
+              <label className="field-label">Email</label>
+              <input className="input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div className="field-group">
+              <label className="field-label">PIN</label>
+              <input className="input" inputMode="numeric" value={form.pin} onChange={(e) => setForm({ ...form, pin: e.target.value })} />
+            </div>
+          </div>
+          <div className="field-row">
+            <div className="field-group">
+              <label className="field-label">Password (for Fixer/Admin login)</label>
+              <input className="input" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </div>
+            <div className="field-group">
+              <label className="field-label">{TERMS.unit}</label>
+              <select className="select" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
+                <option value="">—</option>
+                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="field-row">
+            <div className="field-group">
+              <label className="field-label">Supervisor</label>
+              <select className="select" value={form.supervisorId} onChange={(e) => setForm({ ...form, supervisorId: e.target.value })}>
+                <option value="">—</option>
+                {supervisorOptions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="field-group">
+              <label className="field-label">Roles</label>
+              <div className="checkbox-row">
+                {ROLE_OPTIONS.map((r) => (
+                  <label key={r}>
+                    <input type="checkbox" checked={form.roles.includes(r)} onChange={() => toggleRole(r)} /> {r}
+                  </label>
+                ))}
+              </div>
+              <p style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 8 }}>
+                Only one fixer per {lower(TERMS.unit)} — checking it here removes it from whoever had it.
+                "management" adds the Network health dashboard to their staff app, on top of whatever else they can already do.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn btn-primary" onClick={handleSubmit}>{editingId ? "Save changes" : "Add employee"}</button>
+            <button className="btn btn-ghost" onClick={closeForm}>Cancel</button>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button className="btn btn-primary" onClick={handleSubmit}>{editingId ? "Save changes" : "Add employee"}</button>
-          {editingId && <button className="btn btn-ghost" onClick={() => { setEditingId(null); setForm(emptyEmployeeForm()); }}>Cancel</button>}
+      )}
+
+      <div className="toolbar">
+        <div className="search-box">
+          <Search size={16} />
+          <input className="input" placeholder="Search name, email, PIN…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+        <div className="filter-chips">
+          {["all", ...ROLE_OPTIONS].map((r) => (
+            <button key={r} className={`filter-chip ${roleFilter === r ? "active" : ""}`} onClick={() => setRoleFilter(r)} style={{ textTransform: "capitalize" }}>{r === "all" ? "Everyone" : r}</button>
+          ))}
         </div>
       </div>
 
       <div className="ctable-wrap">
-        <table className="ctable">
+        <table className="ctable stack">
           <thead>
-            <tr><th>Name</th><th>Roles</th><th>Department</th><th>Supervisor</th><th>Email</th><th style={{ textAlign: "right" }}>Action</th></tr>
+            <tr><th>Name</th><th>Roles</th><th>{TERMS.unit}</th><th>Supervisor</th><th>Email</th><th style={{ textAlign: "right" }}>Action</th></tr>
           </thead>
           <tbody>
-            {employees.map((e) => {
+            {rows.map((e) => {
               const dept = departments.find((d) => d.id === e.departmentId);
               const sup = employees.find((s) => s.id === e.supervisorId);
               return (
                 <tr key={e.id}>
-                  <td><strong>{e.name}</strong></td>
-                  <td>{(e.roles || []).map((r) => <span key={r} className="role-badge">{r}</span>)}</td>
-                  <td>{dept?.name || "—"}</td>
-                  <td>{sup?.name || "—"}</td>
-                  <td className="mono" style={{ fontSize: 12 }}>{e.email || "—"}</td>
-                  <td style={{ textAlign: "right" }}>
+                  <td data-label="Name"><div className="cell-main">{e.name}</div>{e.phone && <div className="cell-sub">{e.phone}</div>}</td>
+                  <td data-label="Roles"><div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "inherit" }}>{(e.roles || []).map((r) => <span key={r} className="role-badge">{r}</span>)}</div></td>
+                  <td data-label={TERMS.unit}>{dept?.name || "—"}</td>
+                  <td data-label="Supervisor">{sup?.name || "—"}</td>
+                  <td data-label="Email" className="mono" style={{ fontSize: 12 }}>{e.email || "—"}</td>
+                  <td data-label="" style={{ textAlign: "right" }}>
                     <button className="btn btn-secondary btn-sm" onClick={() => startEdit(e)}><Edit3 size={12} /> Edit</button>
                   </td>
                 </tr>
@@ -918,8 +937,9 @@ function EmployeesTab({ employees, setEmployees, departments, showToast }) {
             })}
           </tbody>
         </table>
+        {rows.length === 0 && <div className="empty-state">No employees match.</div>}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -929,42 +949,49 @@ function EmployeesTab({ employees, setEmployees, departments, showToast }) {
 
 function SentEmailsTab({ emailLog }) {
   const [openId, setOpenId] = useState(null);
-  const sorted = [...emailLog].sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
+  const [type, setType] = useState("all");
+  const sorted = useMemo(
+    () => [...emailLog].filter((m) => type === "all" || m.type === type).sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt)),
+    [emailLog, type]
+  );
 
   return (
-    <>
-      <div style={{ marginBottom: 22 }}>
-        <p className="h-eyebrow">Audit Trail</p>
-        <h1 className="h-title">Sent Emails</h1>
-        <p className="h-desc">Every email the system has generated — assignment, reminder, escalation, and extension notices. This prototype logs emails here instead of dispatching real ones; wire in an SMTP/API key to send them for real.</p>
+    <div className="page">
+      <PageHead eyebrow="Audit trail" title="Sent emails"
+        desc="Every email the system has generated — assignment, reminder, escalation, and extension notices. This prototype logs emails here instead of dispatching real ones; wire in an SMTP/API key to send them for real." />
+
+      <div className="toolbar">
+        <div className="filter-chips">
+          {["all", "assignment", "reminder", "escalation", "extension"].map((t) => (
+            <button key={t} className={`filter-chip ${type === t ? "active" : ""}`} onClick={() => setType(t)} style={{ textTransform: "capitalize" }}>{t === "all" ? "All types" : t}</button>
+          ))}
+        </div>
       </div>
 
       {sorted.length === 0 ? (
         <div className="card empty-state">No emails generated yet.</div>
       ) : (
         <div className="ctable-wrap">
-          <table className="ctable">
+          <table className="ctable stack">
             <thead><tr><th>Sent</th><th>Type</th><th>To</th><th>Subject</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
             <tbody>
               {sorted.map((m) => (
                 <React.Fragment key={m.id}>
                   <tr>
-                    <td className="mono" style={{ fontSize: 12, color: "var(--ink-faint)" }}>{new Date(m.sentAt).toLocaleString()}</td>
-                    <td><span className={`type-badge type-${m.type}`}>{m.type}</span></td>
-                    <td>{m.toName} <span style={{ color: "var(--ink-faint)" }}>&lt;{m.to}&gt;</span></td>
-                    <td>{m.subject}</td>
-                    <td style={{ textAlign: "right" }}>
+                    <td data-label="Sent" className="mono" style={{ fontSize: 12, color: "var(--ink-faint)" }}>{new Date(m.sentAt).toLocaleString()}</td>
+                    <td data-label="Type"><span className={`type-badge type-${m.type}`}>{m.type}</span></td>
+                    <td data-label="To">{m.toName} <span style={{ color: "var(--ink-faint)" }}>&lt;{m.to}&gt;</span></td>
+                    <td data-label="Subject">{m.subject}</td>
+                    <td data-label="" style={{ textAlign: "right" }}>
                       <button className="btn btn-secondary btn-sm" onClick={() => setOpenId(openId === m.id ? null : m.id)}>
                         {openId === m.id ? "Hide" : "View"}
                       </button>
                     </td>
                   </tr>
                   {openId === m.id && (
-                    <tr>
-                      <td colSpan={5}>
-                        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12.5, background: "var(--paper)", padding: 12, borderRadius: 8, border: "1px solid var(--line)" }}>
-                          {m.body}
-                        </pre>
+                    <tr className="expand-row">
+                      <td colSpan={5} data-label="">
+                        <pre className="email-body">{m.body}</pre>
                       </td>
                     </tr>
                   )}
@@ -974,6 +1001,6 @@ function SentEmailsTab({ emailLog }) {
           </table>
         </div>
       )}
-    </>
+    </div>
   );
 }

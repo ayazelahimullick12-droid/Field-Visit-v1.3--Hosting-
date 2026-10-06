@@ -73,20 +73,35 @@ function pushEmail(db, { complaintId, to, toName, type, subject, body }) {
   return email;
 }
 
+const PERSON_LABELS = {
+  name: "Name", pin: "PIN", designation: "Designation", department: "Department", contact: "Contact",
+  phone: "Phone", memberNumber: "Member number", voCode: "VO code",
+};
+
+// "Raised by (member): Name: …, Phone: …" — only the details that were given.
+function raisedByLine(complaint) {
+  const entries = Object.entries(complaint.person || {}).filter(([, v]) => String(v ?? "").trim() !== "");
+  if (entries.length === 0) return null;
+  const details = entries.map(([k, v]) => `${PERSON_LABELS[k] || k}: ${v}`).join(", ");
+  return `Raised by (${complaint.source}): ${details}${complaint.consent === false ? " — did NOT consent to follow-up" : ""}`;
+}
+
 function complaintDetailBlock(complaint, visit) {
   return [
     `Complaint ID: ${complaint.id}`,
-    `Department: ${complaint.department}`,
+    `Unit: ${complaint.department}`,
+    ...(complaint.unit ? [`Team: ${complaint.unit}`] : []),
     `Description: ${complaint.description}`,
     `Urgency: ${complaint.urgency}`,
     `Filed by: ${complaint.filedBy} (${complaint.source})`,
+    ...(raisedByLine(complaint) ? [raisedByLine(complaint)] : []),
     `Filed on: ${complaint.filedDate}`,
     `Related visit: ${visit ? `${visit.location || "N/A"} on ${visit.date || "N/A"}` : complaint.visitId}`,
   ].join("\n");
 }
 
 // --- Action: assign a complaint to the department's fixer and set its deadline
-function assignComplaint(db, { visitId, complaintId, departmentId, days }) {
+function assignComplaint(db, { visitId, complaintId, departmentId, unit, days }) {
   const found = findComplaint(db, visitId, complaintId);
   if (!found) throw new Error("Complaint not found");
   const { complaint, visit } = found;
@@ -94,14 +109,14 @@ function assignComplaint(db, { visitId, complaintId, departmentId, days }) {
   let dept;
   if (complaint.department === "Other" || departmentId) {
     dept = findDeptByIdOrName(db, departmentId);
-    if (!dept) throw new Error("A valid department must be chosen for this complaint");
+    if (!dept) throw new Error("A valid unit must be chosen for this complaint");
   } else {
     dept = findDeptByIdOrName(db, complaint.department);
-    if (!dept) throw new Error(`No department matches "${complaint.department}" — choose one explicitly`);
+    if (!dept) throw new Error(`No unit matches "${complaint.department}" — choose one explicitly`);
   }
 
   const fixer = getDepartmentFixer(db, dept.id);
-  if (!fixer) throw new Error(`No fixer is set up in the "${dept.name}" department yet`);
+  if (!fixer) throw new Error(`No fixer is set up in the "${dept.name}" unit yet`);
 
   const supervisor = fixer.supervisorId
     ? (db.employees || []).find((e) => e.id === fixer.supervisorId)
@@ -111,7 +126,13 @@ function assignComplaint(db, { visitId, complaintId, departmentId, days }) {
   const setAt = new Date();
   const deadline = new Date(setAt.getTime() + daysNum * DAY);
 
+  // A complaint filed as "Other" has no team; the admin may pick one when re-routing it.
+  // Otherwise the team chosen when it was filed is kept, as long as it still belongs to the unit.
+  // (Stored as complaint.department = the Unit, complaint.unit = the Team — see src/lib/terms.js.)
+  const wantedUnit = unit || complaint.unit;
+  const unitMatch = (dept.units || []).find((u) => u.name === wantedUnit);
   complaint.department = dept.name;
+  complaint.unit = unitMatch ? unitMatch.name : null;
   complaint.assignedEmployeeId = fixer.id;
   complaint.assignedTo = fixer.name;
   complaint.assignedEmployeeEmail = fixer.email || null;
@@ -135,7 +156,7 @@ function assignComplaint(db, { visitId, complaintId, departmentId, days }) {
 
   addLog(
     complaint,
-    `Assigned to ${fixer.name} (${dept.name}) — ${daysNum} day(s) given, deadline ${deadline.toLocaleString()}`
+    `Assigned to ${fixer.name} (${dept.name}${complaint.unit ? ` · ${complaint.unit}` : ""}) — ${daysNum} day(s) given, deadline ${deadline.toLocaleString()}`
   );
 
   const email = pushEmail(db, {

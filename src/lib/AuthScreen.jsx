@@ -19,7 +19,7 @@ import { makeId } from "./ids";
  *   after the sign-in/register form, before the footer note
  */
 export default function AuthScreen({
-  employees, onRegister, onLogin, icon, title, subtitle, requireRole, demoHint, footerExtra,
+  employees, onRegister, onLogin, icon, title, subtitle, requireRole, demoHint, footerExtra, embedded,
 }) {
   const [mode, setMode] = useState("login"); // "login" | "register"
   const [loginMethod, setLoginMethod] = useState("pin"); // "pin" | "password"
@@ -102,8 +102,10 @@ export default function AuthScreen({
     onRegister(newEmployee);
   };
 
+  const Outer = embedded ? React.Fragment : "div";
+  const outerProps = embedded ? {} : { className: "login-screen" };
   return (
-    <div className="login-screen">
+    <Outer {...outerProps}>
       <div className="login-card">
         <div className="login-logo">{icon}</div>
         <h1 className="login-title">{title}</h1>
@@ -238,6 +240,6 @@ export default function AuthScreen({
           {demoHint && <><br />{demoHint}</>}
         </p>
       </div>
-    </div>
+    </Outer>
   );
 }

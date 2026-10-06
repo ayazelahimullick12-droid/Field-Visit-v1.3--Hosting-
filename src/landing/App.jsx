@@ -4,12 +4,15 @@ import { usePersistedCollection } from "../lib/usePersistedCollection";
 import { useTheme } from "../lib/theme";
 import ThemeToggle from "../lib/ThemeToggle";
 import AuthScreen from "../lib/AuthScreen";
-import { AUTH_STYLES } from "../lib/authStyles";
+import BdOutline from "../lib/BdOutline";
 
 // Session keys — kept identical to what the staff and admin apps read, so
 // signing in here and landing on staff.html / admin.html needs no re-login.
 const STAFF_SESSION_KEY = "fvt-staff-session"; // employee id, localStorage
 const ADMIN_SESSION_KEY = "fvt-admin-session"; // admin email, sessionStorage
+
+// Major cities, [lng, lat] — decorative pins on the sign-in map.
+const CITY_PINS = [[90.41, 23.81], [91.78, 22.36], [91.87, 24.89], [88.6, 24.37], [89.54, 22.85], [89.27, 25.74], [90.35, 22.7], [90.42, 24.75], [92.0, 21.43]];
 
 export default function App() {
   const [theme, toggleTheme] = useTheme();
@@ -47,10 +50,7 @@ export default function App() {
   if (waitingOnStaffSession || waitingOnAdminSession) {
     return (
       <div className="fvt">
-        <style>{AUTH_STYLES}</style>
-        <div className="login-screen">
-          <div className="login-logo"><MapPin size={20} color="#fff" /></div>
-        </div>
+        <div className="session-loading"><div className="brand-mark"><MapPin size={20} /></div></div>
       </div>
     );
   }
@@ -73,41 +73,50 @@ export default function App() {
 
   return (
     <div className="fvt">
-      <style>{AUTH_STYLES}</style>
-      <div style={{ position: "fixed", top: 16, right: 18 }}>
-        <ThemeToggle theme={theme} onToggle={toggleTheme} />
-      </div>
+      <div className="auth-shell">
+        <section className="auth-art">
+          <div className="brand">
+            <div className="brand-mark"><MapPin size={19} /></div>
+            <div>
+              <div className="brand-name">Field Visit Tracker</div>
+              <div className="brand-sub">BRAC · Head Office</div>
+            </div>
+          </div>
 
-      <div className="login-screen" style={{ flexDirection: "column" }}>
-        <div className="role-picker">
-          <button
-            className={`role-picker-btn ${role === "user" ? "active" : ""}`}
-            onClick={() => setRole("user")}
-          >
-            <User size={15} /> User
-          </button>
-          <button
-            className={`role-picker-btn ${role === "admin" ? "active" : ""}`}
-            onClick={() => setRole("admin")}
-          >
-            <ShieldAlert size={15} /> Admin
-          </button>
-        </div>
+          <BdOutline className="auth-map" pins={CITY_PINS} />
+        </section>
 
-        {role === "user" ? (
-          <AuthScreen
-            employees={employees}
-            onRegister={handleStaffRegister}
-            onLogin={handleStaffLogin}
-            icon={<MapPin size={20} color="#fff" />}
-            title="Field Visit Tracker"
-            subtitle="BRAC Microfinance Programme · Technology Unit"
-            demoHint="Demo: PIN 1234 + password password123 (or email ayaz.elahi@brac.org)"
-            footerExtra={<SsoSection />}
-          />
-        ) : (
-          <AdminLoginCard adminUsers={adminUsers} onLogin={handleAdminLogin} />
-        )}
+        <section className="auth-panel">
+          <div className="auth-panel-top"><ThemeToggle theme={theme} onToggle={toggleTheme} /></div>
+          <div style={{ width: "100%", maxWidth: 420 }}>
+            <div className="role-picker">
+              <button className={`role-picker-btn ${role === "user" ? "active" : ""}`} onClick={() => setRole("user")}>
+                <User size={15} /> User
+              </button>
+              <button className={`role-picker-btn ${role === "admin" ? "active" : ""}`} onClick={() => setRole("admin")}>
+                <ShieldAlert size={15} /> Admin
+              </button>
+            </div>
+
+            <div key={role}>
+              {role === "user" ? (
+                <AuthScreen
+                  embedded
+                  employees={employees}
+                  onRegister={handleStaffRegister}
+                  onLogin={handleStaffLogin}
+                  icon={<MapPin size={22} />}
+                  title="Welcome back"
+                  subtitle="Sign in to log and review field visits"
+                  demoHint="Demo: PIN 1234 + password password123 (or email ayaz.elahi@brac.org)"
+                  footerExtra={<SsoSection />}
+                />
+              ) : (
+                <AdminLoginCard adminUsers={adminUsers} onLogin={handleAdminLogin} />
+              )}
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -154,23 +163,23 @@ function AdminLoginCard({ adminUsers, onLogin }) {
 
   return (
     <div className="login-card">
-      <div className="login-logo"><ShieldAlert size={20} color="#fff" /></div>
-      <h1 className="login-title">Admin Console</h1>
-      <p className="login-sub">Field Visit Tracker · BRAC Microfinance</p>
+      <div className="login-logo"><ShieldAlert size={22} /></div>
+      <h1 className="login-title">Admin console</h1>
+      <p className="login-sub">Complaints, employees, offices and settings</p>
 
       <div className="field-group">
         <label className="field-label">Email</label>
         <div className="login-input-wrap">
-          <Mail size={15} className="login-input-icon" />
-          <input className="input login-input" type="email" placeholder="admin@brac.org"
+          <Mail size={16} className="login-input-icon" />
+          <input className="input login-input" type="email" placeholder="admin@brac.org" autoComplete="username"
                  value={email} onChange={(e) => setEmail(e.target.value)} />
         </div>
       </div>
       <div className="field-group">
         <label className="field-label">Password</label>
         <div className="login-input-wrap">
-          <Lock size={15} className="login-input-icon" />
-          <input className="input login-input" type="password" placeholder="Password"
+          <Lock size={16} className="login-input-icon" />
+          <input className="input login-input" type="password" placeholder="Password" autoComplete="current-password"
                  value={password} onChange={(e) => setPassword(e.target.value)}
                  onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
         </div>
@@ -178,8 +187,8 @@ function AdminLoginCard({ adminUsers, onLogin }) {
 
       {error && <div className="login-error">{error}</div>}
 
-      <button className="btn btn-primary btn-block" style={{ marginTop: 20 }} onClick={handleLogin}>
-        <LogIn size={15} /> Sign in
+      <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 20 }} onClick={handleLogin}>
+        <LogIn size={16} /> Sign in
       </button>
       <p className="login-footer">Demo: admin@brac.org / admin123</p>
 
