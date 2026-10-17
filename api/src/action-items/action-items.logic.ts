@@ -66,6 +66,10 @@ function raisedByLine(c: any) {
   return `Raised by (${c.source}): ${details}${c.consent === false ? ' — did NOT consent to follow-up' : ''}`;
 }
 
+/** "[Field Visit Tracker] High urgency — New action item assigned: FC-ABC123" */
+const subjectFor = (c: any, what: string) =>
+  `[Field Visit Tracker] ${c.urgency ? `${c.urgency} urgency — ` : ''}${what}: ${c.id}`;
+
 /** The details block at the bottom of every action item email. */
 function detailBlock(c: any, visit: any) {
   const where = c.place ? ` (${[c.place.division, c.place.region, c.place.area].filter(Boolean).join(' › ')})` : '';
@@ -136,14 +140,11 @@ export function assign(ctx: Ctx, c: any, visit: any, { departmentId, unit, days 
   addLog(c, `Assigned to the ${dept.name} fixers: ${names(fixers)} (${dept.name}${c.unit ? ` · ${c.unit}` : ''}) — ${daysNum} day(s) given, deadline ${deadline.toLocaleString()}`);
   addLog(c, `Assignment email sent to ${names(fixers)}`);
 
-  return emailEach(fixers, (r) => ({
+  return emailEach(fixers, () => ({
     complaintId: c.id,
     type: 'assignment',
-    subject: `[Field Visit Tracker] New action item assigned: ${c.id}`,
-    body:
-      `Hello ${r.name},\n\nA new action item has been assigned to the ${dept.name} unit's fixers (${names(fixers)}). ` +
-      `Any one of you can resolve it. You have ${daysNum} day(s) (deadline: ${deadline.toLocaleString()}).\n\n` +
-      detailBlock(c, visit),
+    subject: subjectFor(c, 'New action item assigned'),
+    body: `Hello,\n\nA new action item has been assigned to the ${dept.name} Unit.\n\n` + detailBlock(c, visit),
   }));
 }
 
@@ -153,11 +154,11 @@ export function extend(ctx: Ctx, c: any, visit: any, { days }: any): EmailDraft[
   const daysNum = Number(days) || 1;
   const deadline = setDeadline(c, daysNum, 'extension');
   addLog(c, `Deadline extended by the admin — ${daysNum} more day(s), new deadline ${deadline.toLocaleString()}`);
-  return emailEach(currentFixers(ctx, c), (r) => ({
+  return emailEach(currentFixers(ctx, c), () => ({
     complaintId: c.id,
     type: 'extension',
-    subject: `[Field Visit Tracker] Deadline extended: ${c.id}`,
-    body: `Hello ${r.name},\n\nYour deadline for the action item below has been extended by ${daysNum} day(s). New deadline: ${deadline.toLocaleString()}.\n\n` + detailBlock(c, visit),
+    subject: subjectFor(c, 'Deadline extended'),
+    body: `Hello,\n\nThe deadline for the action item below has been extended by ${daysNum} day(s). New deadline: ${deadline.toLocaleString()}.\n\n` + detailBlock(c, visit),
   }));
 }
 
@@ -217,11 +218,11 @@ export function reminderDue(ctx: Ctx, c: any, visit: any, now = new Date()): Ema
   if (now < new Date(deadline.getTime() - windowMs) || now >= deadline) return [];
   c.reminderSent = true;
   addLog(c, `Reminder email sent — deadline in under ${windowMs / HOUR}h`);
-  return emailEach(currentFixers(ctx, c), (r) => ({
+  return emailEach(currentFixers(ctx, c), () => ({
     complaintId: c.id,
     type: 'reminder',
-    subject: `[Field Visit Tracker] Reminder — deadline approaching: ${c.id}`,
-    body: `Hello ${r.name},\n\nThis is a reminder that the deadline for the action item below is ${deadline.toLocaleString()}.\n\n` + detailBlock(c, visit),
+    subject: subjectFor(c, 'Deadline reminder'),
+    body: `Hello,\n\nThis is a reminder that the deadline for the action item below is ${deadline.toLocaleString()}.\n\n` + detailBlock(c, visit),
   }));
 }
 
