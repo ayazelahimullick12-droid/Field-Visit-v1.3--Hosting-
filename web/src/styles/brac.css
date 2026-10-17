@@ -1256,7 +1256,8 @@ table.ctable{ width:100%; border-collapse:separate; border-spacing:0; }
 .office-grid.cols-2{ grid-template-columns:repeat(2,minmax(0,1fr)); }
 .office-grid.cols-1{ grid-template-columns:minmax(0,1fr); }
 .ms{ position:relative; margin-bottom:0; }
-.ms-trigger{ display:flex; align-items:center; justify-content:space-between; gap:8px; text-align:left; cursor:pointer; width:100%; }
+/* the multi-select draws its own chevron icon, so drop .select's background arrow (it showed two) */
+.ms-trigger{ display:flex; align-items:center; justify-content:space-between; gap:8px; text-align:left; cursor:pointer; width:100%; background-image:none; padding-right:14px; }
 .ms-trigger.has{ border-color:var(--brand); }
 .ms-text{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
 .ms-trigger:not(.has) .ms-text{ color:var(--ink-faint); }

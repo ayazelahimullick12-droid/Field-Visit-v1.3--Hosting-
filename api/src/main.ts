@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import * as express from 'express';
 import * as fs from 'fs';
+import * as path from 'path';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { ErrorFilter } from './common/error.filter';
@@ -28,7 +29,17 @@ async function bootstrap() {
 
   if (fs.existsSync(config.webDir)) {
     // /staff, /admin and /summary also answer as /staff.html etc. (links inside the app use those)
-    app.use(express.static(config.webDir, { extensions: ['html'], maxAge: '1h' }));
+    // Pages are always re-checked so a new deploy shows at once; /_next/static files have
+    // content hashes in their names, so they can be kept for a year.
+    app.use(
+      express.static(config.webDir, {
+        extensions: ['html'],
+        setHeaders: (res, filePath) => {
+          const immutable = filePath.includes(`${path.sep}_next${path.sep}static${path.sep}`);
+          res.setHeader('Cache-Control', immutable ? 'public, max-age=31536000, immutable' : 'no-cache');
+        },
+      }),
+    );
   } else {
     console.warn(`[web] ${config.webDir} not found: run "npm run build" in web/ to serve the website from here.`);
   }
