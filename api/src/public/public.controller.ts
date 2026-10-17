@@ -4,6 +4,7 @@ import { PrismaService } from '../common/prisma.service';
 import { VisitsService } from '../visits/visits.service';
 import { anonymised } from '../visits/visit-rules';
 import { DEFAULT_APP_SETTINGS } from '../reference-data/reference-data.controller';
+import { branchJson } from '../structure/structure.controller';
 
 /**
  * The public summary page (/summary.html) reads this without signing in.
@@ -18,7 +19,7 @@ export class PublicController {
   async summary() {
     const [visits, offices, employees, setting] = await Promise.all([
       this.visits.all(),
-      this.prisma.office.findMany(),
+      this.prisma.office.findMany({ where: { type: 'branch' } }),
       this.prisma.employee.findMany({ select: { id: true, roles: true, department: true } }),
       this.prisma.setting.findUnique({ where: { key: 'app' } }),
     ]);
@@ -28,7 +29,7 @@ export class PublicController {
     const from = since.toISOString().slice(0, 10);
     return {
       visits: visits.filter((v) => !v.date || v.date >= from).map(anonymised),
-      offices: offices.map(({ sortOrder, ...o }) => o),
+      offices: offices.map(branchJson),
       employees,
       settings: { ...DEFAULT_APP_SETTINGS, ...((setting?.value as object) || {}) },
     };

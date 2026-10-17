@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from "react";
 import {
   X, Check, Search, Users, ShieldAlert, Building2, AlertCircle, CheckSquare, Hourglass, UserCheck, Radar,
-  Plus, Edit3, Inbox, Mail, RefreshCw, MapPin, MessageCircle, TrendingUp, CheckCircle2, ChevronDown, ChevronUp, Trash2, Star, Lock, ToggleRight,
+  Plus, Edit3, Inbox, Mail, Map as MapIcon, RefreshCw, MapPin, MessageCircle, TrendingUp, CheckCircle2, ChevronDown, ChevronUp, Trash2, Star, Lock, ToggleRight,
 } from "lucide-react";
 import { usePersistedCollection } from "../lib/usePersistedCollection";
 import { useSession, logout, api } from "../lib/session";
 import EmailSettingsTab from "./EmailSettingsTab";
+import LocationsTab from "./LocationsTab";
 import { makeId } from "../lib/ids";
 import { useTheme } from "../lib/theme";
 import AppShell from "../lib/AppShell";
@@ -101,7 +102,13 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
   // employees are saved one at a time (api calls in EmployeesTab), then re-read
   const [employees, , , reloadEmployees] = usePersistedCollection("employees", []);
   const [emailLog, , , reloadEmailLog] = usePersistedCollection("emailLog", []);
-  const [offices, setOffices] = usePersistedCollection("offices", []);
+  const [offices, setOffices, , reloadOffices] = usePersistedCollection("offices", []);
+  // regions, areas, regional and area offices (Locations & lists tab); saved through the API, then re-read
+  const [structure, , , reloadStructure] = usePersistedCollection("structure", {});
+  const saveStructure = async (next) => {
+    await api("/structure", { method: "PUT", body: next });
+    await Promise.all([reloadStructure(), reloadOffices(), reloadVisits()]);
+  };
   const [settings, setSettings] = usePersistedCollection("settings", DEFAULT_SETTINGS);
 
   // Each complaint reaches the admin as soon as the field person submits it.
@@ -129,7 +136,8 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
     { key: "network", label: "Network health", short: "Network", icon: Radar },
     { key: "departments", label: TERMS.units, short: TERMS.units, icon: Building2 },
     { key: "employees", label: "Employees", short: "People", icon: Users },
-    { key: "offices", label: "Offices", short: "Offices", icon: MapPin },
+    { key: "locations", label: "Locations & lists", short: "Locations", icon: MapIcon },
+    { key: "offices", label: "Branch offices", short: "Branches", icon: MapPin },
     { key: "questions", label: "Client questions", short: "Questions", icon: Star },
     { key: "emails", label: "Sent emails", short: "Emails", icon: Inbox },
     { key: "mail", label: "Email settings", short: "Email setup", icon: Mail },
@@ -157,8 +165,9 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
           <EmployeesTab employees={employees} reloadEmployees={reloadEmployees} departments={departments} showToast={showToast} currentAdmin={currentAdmin} />
         )}
         {tab === "offices" && (
-          <OfficesTab offices={offices} setOffices={setOffices} visits={visits} reloadVisits={reloadVisits} settings={settings} setSettings={setSettings} showToast={showToast} />
+          <OfficesTab offices={offices} setOffices={setOffices} structure={structure} visits={visits} reloadVisits={reloadVisits} settings={settings} setSettings={setSettings} showToast={showToast} />
         )}
+        {tab === "locations" && <LocationsTab structure={structure} onSaveStructure={saveStructure} offices={offices} settings={settings} setSettings={setSettings} showToast={showToast} />}
         {tab === "questions" && <QuestionsTab settings={settings} setSettings={setSettings} visits={visits} showToast={showToast} />}
         {tab === "features" && <FeaturesTab settings={settings} setSettings={setSettings} showToast={showToast} />}
         {tab === "emails" && <SentEmailsTab emailLog={emailLog} onRefresh={reloadEmailLog} />}

@@ -71,7 +71,7 @@ function StayCard({ stay: s, index, onChange, onRemove }) {
  * visit date. The offices to be visited, times and accommodation are optional and can be added
  * or changed later from the visit page.
  */
-export default function RegisterVisit({ tree, visit, prefill, focusField, onSave, onCancel, onDelete }) {
+export default function RegisterVisit({ tree, purposes = REASONS, visit, prefill, focusField, onSave, onCancel, onDelete }) {
   const edit = !!visit;
   const now = useMemo(() => new Date(), []);
 
@@ -80,7 +80,7 @@ export default function RegisterVisit({ tree, visit, prefill, focusField, onSave
     if (prefill) return { division: prefill.division, region: prefill.district, area: prefill.area, stops: [{ kind: "branch", name: prefill.name, division: prefill.division, region: prefill.district, area: prefill.area }] };
     return { division: "", region: "", area: "", stops: [] };
   });
-  const [reason, setReason] = useState(visit?.reason || "Monitoring");
+  const [reason, setReason] = useState(visit?.reason || (purposes.includes("Monitoring") ? "Monitoring" : purposes[0]));
   const [reasonOther, setReasonOther] = useState(visit?.reasonOther || "");
   const [date, setDate] = useState(visit?.date || isoDate(now));
   const [visitTime, setVisitTime] = useState(visit?.visitTime || "");
@@ -182,7 +182,8 @@ export default function RegisterVisit({ tree, visit, prefill, focusField, onSave
             <div className="field-group">
               <label className="field-label" htmlFor="reg-reason">Purpose <span className="req">*</span></label>
               <select id="reg-reason" className="select" value={reason} onChange={(e) => setReason(e.target.value)}>
-                {REASONS.map((r) => <option key={r}>{r}</option>)}
+                {/* the admin's list; a purpose since removed from it stays selectable on visits that use it */}
+                {(purposes.includes(reason) ? purposes : [reason, ...purposes]).map((r) => <option key={r}>{r}</option>)}
               </select>
             </div>
             {reason === "Other" && (

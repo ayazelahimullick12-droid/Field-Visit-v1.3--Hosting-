@@ -43,15 +43,30 @@ export const STATUS_META = {
 
 export const officeKey = (o) => `${o.district}::${o.name}`;
 
-/** division → district → area → [branch names], from the active offices. */
-export function buildLocationTree(offices) {
+/**
+ * division → region → area → [branch names], for the visit form's dropdowns.
+ * Regions and areas come from the admin's Locations list (`structure`, from /api/structure), so a
+ * new region or area shows even before it has a branch; branches come from the active offices
+ * (a branch's region is `o.district`, its older name). The tree also carries the active
+ * Regional and Area Offices, as `tree.regionalOffices` / `tree.areaOffices` (not enumerable, so
+ * Object.keys(tree) is still just the divisions).
+ */
+export function buildLocationTree(offices, structure) {
   const tree = {};
+  const add = (division, region, area) => {
+    if (!division || !region) return;
+    tree[division] = tree[division] || {};
+    tree[division][region] = tree[division][region] || {};
+    if (area) tree[division][region][area] = tree[division][region][area] || [];
+  };
+  (structure?.regions || []).filter((r) => r.active !== false).forEach((r) => add(r.division, r.name));
+  (structure?.areas || []).filter((a) => a.active !== false).forEach((a) => add(a.division, a.region, a.name));
   (offices || []).filter((o) => o.active !== false).forEach((o) => {
-    tree[o.division] = tree[o.division] || {};
-    tree[o.division][o.district] = tree[o.division][o.district] || {};
-    tree[o.division][o.district][o.area] = tree[o.division][o.district][o.area] || [];
-    tree[o.division][o.district][o.area].push(o.name);
+    add(o.division, o.district, o.area);
+    if (o.area) tree[o.division][o.district][o.area].push(o.name);
   });
+  Object.defineProperty(tree, "regionalOffices", { value: (structure?.regionalOffices || []).filter((o) => o.active !== false) });
+  Object.defineProperty(tree, "areaOffices", { value: (structure?.areaOffices || []).filter((o) => o.active !== false) });
   return tree;
 }
 

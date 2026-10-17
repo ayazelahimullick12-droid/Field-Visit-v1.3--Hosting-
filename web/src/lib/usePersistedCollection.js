@@ -5,7 +5,7 @@ const API_BASE = "/api";
 // Reference data the staff app needs to open with no signal (who is signed in,
 // units and teams, the office list, settings). A copy is kept in localStorage
 // after every successful load. Passwords are never kept on the device.
-const OFFLINE_COPY = new Set(["employees", "departments", "offices", "settings"]);
+const OFFLINE_COPY = new Set(["employees", "departments", "offices", "structure", "settings"]);
 const cacheKey = (name) => `fvt-cache:${name}`;
 const withoutSecrets = (data) => (Array.isArray(data) ? data.map(({ password, ...rest }) => rest) : data);
 

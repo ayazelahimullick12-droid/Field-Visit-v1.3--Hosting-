@@ -98,23 +98,46 @@ export function anonymised(v: any) {
   return out;
 }
 
+// ---------- a Region or Area renamed or moved by the admin: its past visits follow ----------
+
+/**
+ * The visit with every place in `from` (a region, or one area of it) moved to `to`.
+ * Returns null if the visit has nothing there.
+ */
+export function renamePlaceInVisit(
+  v: any,
+  from: { region: string; area?: string },
+  to: { division: string; region: string; area?: string },
+) {
+  const hit = (p: any) => p && p.region === from.region && (!from.area || p.area === from.area);
+  const move = (p: any) => (hit(p) ? { ...p, division: to.division, region: to.region, ...(from.area ? { area: to.area } : {}) } : p);
+  const next: any = { ...v, stops: (v.stops || []).map(move) };
+  if (v.region === from.region && (!from.area || v.area === from.area)) Object.assign(next, move({ division: v.division, region: v.region, area: v.area }));
+  for (const k of ENTRY_LISTS) {
+    next[k] = (v[k] || []).map((e: any) => ({ ...e, place: move(e.place), ...(e.places ? { places: e.places.map(move) } : {}) }));
+  }
+  return JSON.stringify(next) === JSON.stringify(v) ? null : next;
+}
+
 // ---------- an office renamed or moved by the admin: relink its past visits ----------
 
+// a branch's region is `region` (older screens call it `district`)
+const regionOf = (office: any) => office.region ?? office.district ?? '';
 const sameOffice = (name: string, region: string, office: any) =>
-  name === office.name && (region || '') === (office.district || '');
+  name === office.name && (region || '') === regionOf(office);
 
 /** The visit with every mention of `existing` office changed to the edited `form`. Returns null if unchanged. */
 export function relinkOffice(v: any, existing: any, form: any) {
   const movePlace = (p: any) =>
     p && sameOffice(p.office, p.region, existing)
-      ? { ...p, office: form.name, branch: p.officeKind === 'branch' ? form.name : p.branch, region: form.district, area: form.area, division: form.division }
+      ? { ...p, office: form.name, branch: p.officeKind === 'branch' ? form.name : p.branch, region: regionOf(form), area: form.area, division: form.division }
       : p && p.branch === existing.name
         ? { ...p, branch: form.name }
         : p;
   const next: any = {
     ...v,
     stops: (v.stops || []).map((s: any) =>
-      sameOffice(s.name, s.region, existing) ? { ...s, name: form.name, region: form.district, area: form.area, division: form.division } : s,
+      sameOffice(s.name, s.region, existing) ? { ...s, name: form.name, region: regionOf(form), area: form.area, division: form.division } : s,
     ),
   };
   for (const k of ENTRY_LISTS) {

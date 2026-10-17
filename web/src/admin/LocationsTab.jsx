@@ -1,0 +1,260 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { Plus, Edit3, Trash2, Power, Check, X, MapPin, Building2, Map as MapIcon, ListChecks } from "lucide-react";
+import { makeId } from "../lib/ids";
+import { DEFAULT_PURPOSES } from "../lib/visits";
+
+/* Admin console → Locations & lists.
+   Division → Region → Area → Branch:
+     - Divisions are the 8 government divisions (fixed).
+     - Regions (each in a Division) and Areas (each in a Region) are BRAC's own, managed here.
+     - Regional Offices (placed in a Division) and Area Offices (placed in a Region) are managed here.
+     - Branch Offices are on the Offices tab (each placed in an Area).
+   Also the "Purpose of visit" choices on the visit form.
+   Everything here is saved with one PUT /api/structure (or /api/settings for purposes). */
+
+const SECTIONS = [
+  { key: "regions", label: "Regions", icon: MapIcon },
+  { key: "areas", label: "Areas", icon: MapPin },
+  { key: "regionalOffices", label: "Regional Offices", icon: Building2 },
+  { key: "areaOffices", label: "Area Offices", icon: Building2 },
+  { key: "purposes", label: "Purposes of visit", icon: ListChecks },
+];
+
+export default function LocationsTab({ structure, onSaveStructure, offices, settings, setSettings, showToast }) {
+  const [section, setSection] = useState("regions");
+  const s = { divisions: [], regions: [], areas: [], regionalOffices: [], areaOffices: [], ...(structure || {}) };
+
+  /** Saves the four lists (the server checks names and renames offices / past visits to match). */
+  const save = async (patch, message) => {
+    try {
+      await onSaveStructure({ ...s, ...patch });
+      showToast(message);
+    } catch (err) {
+      showToast(err.message);
+    }
+  };
+
+  const counts = {
+    regions: s.regions.length, areas: s.areas.length, regionalOffices: s.regionalOffices.length, areaOffices: s.areaOffices.length,
+    purposes: (settings?.visitPurposes?.length ? settings.visitPurposes : DEFAULT_PURPOSES).length + 1,
+  };
+
+  return (
+    <div className="page">
+      <div className="page-head">
+        <div>
+          <p className="h-eyebrow">Configuration</p>
+          <h1 className="h-title">Locations & lists</h1>
+          <p className="h-desc">
+            Division → Region → Area → Branch. Add the Regions and Areas here, then the offices in them. Branch Offices are on
+            the <b>Offices</b> tab. Everything here appears on the visit form straight away.
+          </p>
+        </div>
+      </div>
+
+      <div className="filter-chips" style={{ marginBottom: 16 }}>
+        {SECTIONS.map((x) => (
+          <button key={x.key} className={`filter-chip ${section === x.key ? "active" : ""}`} onClick={() => setSection(x.key)}>
+            <x.icon size={13} /> {x.label} <span className="badge-count">{counts[x.key]}</span>
+          </button>
+        ))}
+      </div>
+
+      {section === "regions" && (
+        <ListEditor
+          title="Regions" what="region" rows={s.regions}
+          hint="Each region belongs to one Division."
+          columns={[{ key: "division", label: "Division", options: () => s.divisions }]}
+          usage={(r) => s.areas.filter((a) => a.regionId === r.id).length + s.areaOffices.filter((o) => o.region === r.name).length + offices.filter((o) => o.district === r.name).length}
+          usageText="It has areas, area offices or branches: switch it off instead."
+          onSave={(rows, msg) => save({ regions: rows }, msg)}
+        />
+      )}
+
+      {section === "areas" && (
+        <ListEditor
+          title="Areas" what="area" rows={s.areas.map((a) => ({ ...a, regionLabel: a.region }))}
+          hint="Each area belongs to one Region (and so to that region's Division)."
+          columns={[{ key: "regionId", label: "Region", options: () => s.regions.map((r) => ({ value: r.id, label: `${r.name} · ${r.division.replace(/ Division$/, "")}` })) }]}
+          usage={(a) => offices.filter((o) => o.district === a.region && o.area === a.name).length}
+          usageText="It has branch offices: switch it off instead."
+          onSave={(rows, msg) => save({ areas: rows.map(({ regionLabel, ...a }) => a) }, msg)}
+        />
+      )}
+
+      {section === "regionalOffices" && (
+        <ListEditor
+          title="Regional Offices" what="regional office" rows={s.regionalOffices}
+          hint="A Regional Office is placed in a Division. Staff see the Regional Offices of the visit's division."
+          columns={[{ key: "division", label: "Division", options: () => s.divisions }]}
+          onSave={(rows, msg) => save({ regionalOffices: rows }, msg)}
+        />
+      )}
+
+      {section === "areaOffices" && (
+        <ListEditor
+          title="Area Offices" what="area office" rows={s.areaOffices}
+          hint="An Area Office is placed in a Region (and so its Division). Staff see the Area Offices of the visit's region."
+          columns={[{ key: "region", label: "Region", options: () => s.regions.map((r) => ({ value: r.name, label: `${r.name} · ${r.division.replace(/ Division$/, "")}` })) }]}
+          onSave={(rows, msg) => save({ areaOffices: rows }, msg)}
+        />
+      )}
+
+      {section === "purposes" && <PurposesEditor settings={settings} setSettings={setSettings} showToast={showToast} />}
+    </div>
+  );
+}
+
+/* ---------- one list (name + where it sits), with add / edit / switch off / delete ---------- */
+
+function ListEditor({ title, what, rows, hint, columns, usage, usageText, onSave }) {
+  const empty = () => Object.fromEntries([["name", ""], ...columns.map((c) => [c.key, ""])]);
+  const [form, setForm] = useState(null); // null | { id?, name, ...columns }
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [sureId, setSureId] = useState(null);
+  const opts = (c) => c.options().map((o) => (typeof o === "string" ? { value: o, label: o } : o));
+  const labelOf = (c, v) => opts(c).find((o) => o.value === v)?.label || v || "—";
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => !q || `${r.name} ${columns.map((c) => labelOf(c, r[c.key])).join(" ")}`.toLowerCase().includes(q));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, query]);
+
+  const submit = () => {
+    const name = form.name.trim();
+    if (!name) return setError(`Give the ${what} a name.`);
+    for (const c of columns) if (!form[c.key]) return setError(`Choose the ${c.label.toLowerCase()}.`);
+    const scope = columns[0].key;
+    if (rows.some((r) => r.id !== form.id && r.name.toLowerCase() === name.toLowerCase() && (what === "region" || r[scope] === form[scope])))
+      return setError(`There is already a ${what} called "${name}"${what === "region" ? "" : " there"}.`);
+    const row = { ...form, name };
+    const next = form.id ? rows.map((r) => (r.id === form.id ? { ...r, ...row } : r)) : [...rows, { id: makeId(what === "region" ? "RGN" : what === "area" ? "AREA" : "OFF"), active: true, ...row }];
+    onSave(next, `${name} ${form.id ? "saved" : "added"}.`);
+    setForm(null);
+  };
+
+  const toggle = (r) => onSave(rows.map((x) => (x.id === r.id ? { ...x, active: x.active === false } : x)), `${r.name} ${r.active === false ? "switched on" : "switched off — it no longer shows on the visit form"}.`);
+  const remove = (r) => {
+    if (sureId !== r.id) { setSureId(r.id); return; }
+    setSureId(null);
+    onSave(rows.filter((x) => x.id !== r.id), `${r.name} deleted.`);
+  };
+
+  return (
+    <div className="card card-pad">
+      <div className="section-header">
+        <div>
+          <p className="analytics-card-title" style={{ marginBottom: 2 }}>{title}</p>
+          <p className="analytics-card-sub" style={{ margin: 0 }}>{hint}</p>
+        </div>
+        {!form && <button className="btn btn-primary btn-sm" onClick={() => { setForm(empty()); setError(""); }}><Plus size={14} /> Add {what}</button>}
+      </div>
+
+      {form && (
+        <div className="card card-pad page-enter" style={{ margin: "12px 0 16px", background: "var(--paper, transparent)" }}>
+          <div className="field-row">
+            <div className="field-group">
+              <label className="field-label">Name</label>
+              <input className="input" autoFocus value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setError(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} />
+            </div>
+            {columns.map((c) => (
+              <div className="field-group" key={c.key}>
+                <label className="field-label">{c.label}</label>
+                <select className="select" value={form[c.key]} onChange={(e) => { setForm({ ...form, [c.key]: e.target.value }); setError(""); }}>
+                  <option value="">Select {c.label.toLowerCase()}…</option>
+                  {opts(c).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+          {form.id && <p className="field-hint" style={{ marginTop: -4 }}>Renaming or moving it also updates its offices and past visits.</p>}
+          {error && <div className="form-error" role="alert">{error}</div>}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="btn btn-primary" onClick={submit}><Check size={14} /> {form.id ? "Save" : `Add ${what}`}</button>
+            <button className="btn btn-ghost" onClick={() => setForm(null)}><X size={14} /> Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="toolbar" style={{ marginTop: 12 }}>
+        <div className="search-box"><input className="input" placeholder={`Search ${title.toLowerCase()}…`} value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+      </div>
+
+      {shown.length === 0 ? <div className="empty-state">No {title.toLowerCase()} yet.</div> : (
+        <div className="ctable-wrap">
+          <table className="ctable stack">
+            <thead><tr><th>Name</th>{columns.map((c) => <th key={c.key}>{c.label}</th>)}<th>Status</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
+            <tbody>
+              {shown.map((r) => {
+                const used = usage ? usage(r) : 0;
+                return (
+                  <tr key={r.id} style={r.active === false ? { opacity: 0.6 } : undefined}>
+                    <td data-label="Name"><div className="cell-main">{r.name}</div></td>
+                    {columns.map((c) => <td key={c.key} data-label={c.label}>{labelOf(c, r[c.key])}</td>)}
+                    <td data-label="Status">{r.active === false ? <span className="pill pill-stale">Off</span> : <span className="pill pill-ok">On</span>}</td>
+                    <td data-label="" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => { setForm({ id: r.id, name: r.name, ...Object.fromEntries(columns.map((c) => [c.key, r[c.key] || ""])) }); setError(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Edit3 size={12} /> Edit</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => toggle(r)}><Power size={12} /> {r.active === false ? "Switch on" : "Switch off"}</button>
+                      {used === 0 ? (
+                        <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }} onClick={() => remove(r)}><Trash2 size={12} /> {sureId === r.id ? "Tap again" : "Delete"}</button>
+                      ) : <span className="field-hint" title={usageText} style={{ marginLeft: 6 }}>in use</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Purpose of visit choices ---------- */
+
+function PurposesEditor({ settings, setSettings, showToast }) {
+  const saved = settings?.visitPurposes?.length ? settings.visitPurposes : DEFAULT_PURPOSES;
+  const [list, setList] = useState(saved);
+  const [text, setText] = useState("");
+  useEffect(() => { setList(saved); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [settings?.visitPurposes]);
+
+  const persist = (next, msg) => { setList(next); setSettings({ ...(settings || {}), visitPurposes: next }); showToast(msg); };
+  const add = () => {
+    const p = text.trim();
+    if (!p) return;
+    if (p.toLowerCase() === "other" || list.some((x) => x.toLowerCase() === p.toLowerCase())) { showToast(`"${p}" is already on the list.`); return; }
+    persist([...list, p], `"${p}" added.`);
+    setText("");
+  };
+  const move = (i, d) => { const next = [...list]; [next[i], next[i + d]] = [next[i + d], next[i]]; persist(next, "Order saved."); };
+
+  return (
+    <div className="card card-pad">
+      <p className="analytics-card-title" style={{ marginBottom: 2 }}>Purposes of visit</p>
+      <p className="analytics-card-sub">The choices on the visit form, in this order. <b>Other</b> is always offered last, and asks the person to type the reason. Removing a purpose doesn't change visits that already use it.</p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "8px 0 14px" }}>
+        <input className="input" style={{ flex: "1 1 240px" }} placeholder="New purpose, e.g. Audit" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} maxLength={60} />
+        <button className="btn btn-primary" onClick={add}><Plus size={14} /> Add purpose</button>
+      </div>
+      <div className="ctable-wrap">
+        <table className="ctable stack">
+          <tbody>
+            {list.map((p, i) => (
+              <tr key={p}>
+                <td data-label="Purpose"><div className="cell-main">{p}</div></td>
+                <td data-label="" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  <button className="btn btn-ghost btn-sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p} up`}>↑</button>
+                  <button className="btn btn-ghost btn-sm" disabled={i === list.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${p} down`}>↓</button>
+                  <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }} disabled={list.length === 1} onClick={() => persist(list.filter((x) => x !== p), `"${p}" removed.`)}><Trash2 size={12} /> Remove</button>
+                </td>
+              </tr>
+            ))}
+            <tr><td data-label="Purpose"><div className="cell-main" style={{ color: "var(--ink-faint)" }}>Other (type the reason)</div></td><td data-label="" style={{ textAlign: "right" }}><span className="field-hint">always shown</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

@@ -16,6 +16,7 @@ import { MailController } from './mail/mail.controller';
 import { MailService } from './mail/mail.service';
 import { UploadsController } from './uploads/uploads.controller';
 import { PublicController } from './public/public.controller';
+import { StructureController } from './structure/structure.controller';
 
 /**
  * The whole API. To add a feature: write a controller (endpoints) and, if it has rules,
@@ -32,6 +33,7 @@ import { PublicController } from './public/public.controller';
     AuthController,
     PeopleController,
     ReferenceDataController,
+    StructureController,
     VisitsController,
     ActionItemsController,
     MailController,

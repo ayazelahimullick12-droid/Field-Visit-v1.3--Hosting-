@@ -64,7 +64,7 @@ export default function OfficesView({ records, offices, coverage, target, period
   const exportCsv = () => downloadCsv(`office-visits-${period}.csv`, [
     { label: "Office", key: "name" }, { label: "Type", get: (r) => KIND_LABEL[r.kind] }, { label: "Under", key: "parent" },
     { label: `Status (visited within ${target} days)`, get: (r) => (r.status ? STATUS_META[r.status].label : "") },
-    { label: "Division", key: "division" }, { label: "District", key: "region" }, { label: "Area", key: "area" },
+    { label: "Division", key: "division" }, { label: "Region", key: "region" }, { label: "Area", key: "area" },
     { label: `Visits (${meta.label})`, key: "visits" }, { label: "Staff", key: "staff" },
     { label: "Action items", get: (r) => r.entries.complaints }, { label: "Client interactions", get: (r) => r.entries.interactions },
     { label: "Observations", get: (r) => r.entries.observations }, { label: "Stories", get: (r) => r.entries.stories },
@@ -105,7 +105,7 @@ export default function OfficesView({ records, offices, coverage, target, period
         <div className="toolbar">
           <div className="search-box">
             <Search size={16} />
-            <input className="input" placeholder="Search office, area, district, person…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input className="input" placeholder="Search office, area, region, person…" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <select className="select" aria-label="Sort" value={sort} onChange={(e) => setSort(e.target.value)} style={{ width: "auto" }}>
             {Object.entries(SORTS).map(([k, s]) => <option key={k} value={k}>{s.label}</option>)}

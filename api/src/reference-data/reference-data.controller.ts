@@ -7,12 +7,15 @@ import { AdminOnly } from '../auth/access';
 export const DEFAULT_APP_SETTINGS = {
   visitTargetDays: 90,
   managementTabs: { offices: false, people: false, analytics: false },
+  // "Purpose of visit" choices on the visit form ("Other" is always added, with a typed reason)
+  visitPurposes: ['Onboarding', 'Monitoring', 'Training', 'Action item resolution', 'Survey'],
 };
 
 /**
- * Lists the admin maintains: units and teams (departments), offices and app settings,
+ * Lists the admin maintains: units and teams (departments) and app settings,
  * plus the log of sent emails. Everyone signed in can read them; only admins can save.
  * The admin console sends the whole list back when it saves, as it always has.
+ * (Offices, regions and areas are in structure/structure.controller.ts.)
  */
 @Controller('api')
 export class ReferenceDataController {
@@ -48,39 +51,6 @@ export class ReferenceDataController {
       }
     });
     return this.departments();
-  }
-
-  // ---------- offices ----------
-
-  @Get('offices')
-  async offices() {
-    const rows = await this.prisma.office.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] });
-    return rows.map(({ sortOrder, ...o }) => o);
-  }
-
-  @AdminOnly()
-  @Put('offices')
-  async saveOffices(@Body() list: any[]) {
-    if (!Array.isArray(list)) throw new UserError('Expected a list of offices.');
-    const num = (v: any) => (v === '' || v == null || isNaN(Number(v)) ? null : Number(v));
-    await this.prisma.$transaction(async (tx) => {
-      await tx.office.deleteMany({ where: { id: { notIn: list.map((o) => String(o.id)) } } });
-      for (const [i, o] of list.entries()) {
-        const data = {
-          name: String(o.name || '').trim(),
-          type: o.type || 'branch',
-          division: o.division || null,
-          district: o.district || null,
-          area: o.area || null,
-          lat: num(o.lat),
-          lng: num(o.lng),
-          active: o.active !== false,
-          sortOrder: i,
-        };
-        await tx.office.upsert({ where: { id: String(o.id) }, create: { id: String(o.id), ...data }, update: data });
-      }
-    }, { timeout: 60_000 });
-    return this.offices();
   }
 
   // ---------- app settings ----------

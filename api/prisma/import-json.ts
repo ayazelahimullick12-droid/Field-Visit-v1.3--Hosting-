@@ -47,12 +47,24 @@ async function main() {
 
   for (const [i, o] of (db.offices || []).entries()) {
     const data = {
-      name: o.name, type: o.type || 'branch', division: o.division || null, district: o.district || null, area: o.area || null,
+      name: o.name, type: o.type || 'branch', division: o.division || null, region: o.region || o.district || null, area: o.area || null,
       lat: o.lat ?? null, lng: o.lng ?? null, active: o.active !== false, sortOrder: i,
     };
     await prisma.office.upsert({ where: { id: o.id }, create: { id: o.id, ...data }, update: data });
   }
   console.log(`offices: ${(db.offices || []).length}`);
+
+  // Division → Region → Area: each region and area the branches use, plus their Regional / Area Office
+  const id = (prefix: string, key: string) => `${prefix}-${require('crypto').createHash('md5').update(key).digest('hex').slice(0, 8).toUpperCase()}`;
+  for (const o of db.offices || []) {
+    const region = o.region || o.district;
+    if (!region || !o.area) continue;
+    const r = await prisma.region.upsert({ where: { name: region }, create: { id: id('RGN', region), name: region, division: o.division }, update: {} });
+    await prisma.area.upsert({ where: { regionId_name: { regionId: r.id, name: o.area } }, create: { id: id('AREA', `${region}::${o.area}`), name: o.area, regionId: r.id }, update: {} });
+    await prisma.office.upsert({ where: { id: id('OFF-R', region) }, create: { id: id('OFF-R', region), name: `${region} Region Office`, type: 'region', division: o.division, region }, update: {} });
+    await prisma.office.upsert({ where: { id: id('OFF-A', `${region}::${o.area}`) }, create: { id: id('OFF-A', `${region}::${o.area}`), name: `${o.area} Office`, type: 'area', division: o.division, region, area: o.area }, update: {} });
+  }
+  console.log('regions and areas: done');
 
   for (const v of db.visits || []) {
     const fields = { employeeId: String(v.employeeId || ''), status: v.status === 'done' ? 'done' : 'open', date: v.date || null, data: v };

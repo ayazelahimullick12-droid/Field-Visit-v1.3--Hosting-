@@ -12,7 +12,11 @@
 // so expandVisits() turns visits into one record per office for them.
 
 export const UNDEFINED_UNIT = "Undefined";
-export const REASONS = ["Onboarding", "Monitoring", "Training", "Action item resolution", "Survey", "Other"];
+// "Purpose of visit" choices. The admin edits the list (Admin → Locations & lists → settings.visitPurposes);
+// these are the defaults. "Other" is always offered last, with a typed reason.
+export const DEFAULT_PURPOSES = ["Onboarding", "Monitoring", "Training", "Action item resolution", "Survey"];
+export const purposesOf = (settings) => [...(settings?.visitPurposes?.length ? settings.visitPurposes : DEFAULT_PURPOSES).filter((p) => p !== "Other"), "Other"];
+export const REASONS = [...DEFAULT_PURPOSES, "Other"];
 
 // Village organisations are typed in as codes under the branch they belong to, and stored as
 // "<code> · <branch>" (e.g. "VO-142 · Mirpur Branch"), so the branch is always known.
@@ -234,7 +238,7 @@ export function submittedComplaints(trips) {
 
 /* ---------- office renames (admin console → Offices) ---------- */
 
-const sameOffice = (name, region, office) => name === office.name && (region || "") === (office.district || "");
+const sameOffice = (name, region, office) => name === office.name && (region || "") === (office.district || office.region || "");
 
 /** How many visits planned or recorded something at this office. */
 export const visitsAtOffice = (trips, office) => (trips || []).filter((v) =>

@@ -44,7 +44,7 @@ export function drillFieldFor(filter) {
   if (filter.division !== "All") return "region";
   return "division";
 }
-export const DRILL_LABELS = { division: "Division", region: "District", area: "Area", location: "Branch" };
+export const DRILL_LABELS = { division: "Division", region: "Region", area: "Area", location: "Branch" };
 
 /* ============================== FILTER BARS ============================== */
 
@@ -81,10 +81,10 @@ export function LocationFilterBar({ offices, value, onChange, labelled = false }
           {divisions.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
       )}
-      {value.division !== "All" && field("District",
-        <select className="select" aria-label="District" value={value.region}
+      {value.division !== "All" && field("Region",
+        <select className="select" aria-label="Region" value={value.region}
                 onChange={(e) => onChange({ ...value, region: e.target.value, area: "All", branch: "All" })}>
-          <option value="All">All Districts</option>
+          <option value="All">All Regions</option>
           {districts.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
       )}

@@ -18,11 +18,11 @@ function MiniLocator({ office, siblings }) {
     const proj = geoMercator().fitExtent([[18, 18], [302, 222]], f);
     return { d: geoPath(proj)(f), proj };
   }, [office.district]);
-  if (!geo) return <div className="viz-empty">No map outline for this district.</div>;
+  if (!geo) return <div className="viz-empty">No map outline for this region.</div>;
   const at = (o) => (Number.isFinite(o.lat) && Number.isFinite(o.lng) ? geo.proj([o.lng, o.lat]) : null);
   const me = at(office);
   return (
-    <svg className="mini-locator" viewBox="0 0 320 240" role="img" aria-label={`${office.name} within ${office.district} district`}>
+    <svg className="mini-locator" viewBox="0 0 320 240" role="img" aria-label={`${office.name} within ${office.district}`}>
       <path d={geo.d} fill="var(--map-empty)" stroke="var(--card)" strokeWidth="2" />
       {siblings.filter((o) => o.key !== office.key).map((o) => { const p = at(o); return p ? <circle key={o.key} cx={p[0]} cy={p[1]} r="3.4" fill={STATUS_META[o.status].color} opacity=".55" /> : null; })}
       {me && (
@@ -31,7 +31,7 @@ function MiniLocator({ office, siblings }) {
           <circle cx={me[0]} cy={me[1]} r="7" fill="var(--brand)" stroke="var(--card)" strokeWidth="2.4" />
         </g>
       )}
-      <text x="16" y="230" fontSize="11" fontWeight="700" fill="var(--ink-faint)">{office.district} district</text>
+      <text x="16" y="230" fontSize="11" fontWeight="700" fill="var(--ink-faint)">{office.district}</text>
     </svg>
   );
 }

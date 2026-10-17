@@ -3,22 +3,22 @@ import { X, Building2, Users, Check, MapPin, ChevronDown } from "lucide-react";
 import { voName, voBranch, placeOfStop, shortName } from "../../lib/visits";
 
 /* Where a visit goes, and which offices each entry is about.
-   A visit is registered for one Division → District → Area (from the admin's Offices list).
+   A visit is registered for one Division → Region → Area (from the admin's Locations list).
    Within it, the offices are picked from three lists — Regional Offices (all in the division),
-   Area Offices (all in the district) and Branch Offices (all in the area) — several of each,
+   Area Offices (all in the region) and Branch Offices (all in the area) — several of each,
    and village organisations (VOs) are typed in as codes under a chosen branch. */
 
-export const regionOfficeName = (district) => `${district} Region Office`;
-export const areaOfficeName = (area) => `${area} Office`;
 export const KIND_TITLE = { region: "Regional Office", area: "Area Office", branch: "Branch Office" };
 
-/** The three lists of offices that can be picked for a visit's division / district / area. */
+/** The three lists of offices that can be picked for a visit's division / region / area
+ *  (the Regional and Area Offices are the admin's, carried on the tree: see buildLocationTree). */
 export function officeOptions(tree, division, region, area) {
-  const districts = tree[division] || {};
-  const areas = districts[region] || {};
+  const areas = (tree[division] || {})[region] || {};
   return {
-    region: Object.keys(districts).map((r) => ({ division, region: r, area: "", office: regionOfficeName(r), officeKind: "region", branch: "" })),
-    area: Object.keys(areas).map((a) => ({ division, region, area: a, office: areaOfficeName(a), officeKind: "area", branch: "" })),
+    region: (tree.regionalOffices || []).filter((o) => o.division === division)
+      .map((o) => ({ division, region: "", area: "", office: o.name, officeKind: "region", branch: "" })),
+    area: (tree.areaOffices || []).filter((o) => o.region === region)
+      .map((o) => ({ division, region, area: "", office: o.name, officeKind: "area", branch: "" })),
     branch: (areas[area] || []).map((b) => ({ division, region, area, office: b, officeKind: "branch", branch: b })),
   };
 }
@@ -30,12 +30,12 @@ export const placesToStops = (places) => places.map((p) => ({
   name: p.office, division: p.division, region: p.region, area: p.area,
 }));
 
-/* ------------------------------ Division → District → Area ------------------------------ */
+/* ------------------------------ Division → Region → Area ------------------------------ */
 
 export function AreaPicker({ tree, value, onChange, idPrefix = "loc" }) {
   const { division = "", region = "", area = "" } = value;
-  const districts = division ? Object.keys(tree[division] || {}) : [];
-  const areas = division && region ? Object.keys((tree[division] || {})[region] || {}) : [];
+  const regions = division ? Object.keys(tree[division] || {}).sort() : [];
+  const areas = division && region ? Object.keys((tree[division] || {})[region] || {}).sort() : [];
   return (
     <div className="area-grid">
       <div className="field-group">
@@ -46,16 +46,16 @@ export function AreaPicker({ tree, value, onChange, idPrefix = "loc" }) {
         </select>
       </div>
       <div className="field-group">
-        <label className="field-label" htmlFor={`${idPrefix}-region`}>District <span className="req">*</span></label>
+        <label className="field-label" htmlFor={`${idPrefix}-region`}>Region <span className="req">*</span></label>
         <select id={`${idPrefix}-region`} className="select" value={region} disabled={!division} onChange={(e) => onChange({ division, region: e.target.value, area: "" })}>
-          <option value="">{division ? "Select district" : "Select a division first"}</option>
-          {districts.map((r) => <option key={r}>{r}</option>)}
+          <option value="">{division ? "Select region" : "Select a division first"}</option>
+          {regions.map((r) => <option key={r}>{r}</option>)}
         </select>
       </div>
       <div className="field-group">
         <label className="field-label" htmlFor={`${idPrefix}-area`}>Area <span className="req">*</span></label>
         <select id={`${idPrefix}-area`} className="select" value={area} disabled={!region} onChange={(e) => onChange({ division, region, area: e.target.value })}>
-          <option value="">{region ? "Select area" : "Select a district first"}</option>
+          <option value="">{region ? "Select area" : "Select a region first"}</option>
           {areas.map((a) => <option key={a}>{a}</option>)}
         </select>
       </div>
@@ -159,13 +159,13 @@ export function OfficeSelector({ tree, division, region, area, value, onChange, 
   const listed = new Set([...opts.region, ...opts.area, ...opts.branch].map((o) => o.office));
   const stray = value.filter((p) => p.officeKind !== "vo" ? !listed.has(p.office) : !names.includes(voBranch(p.office)));
 
-  if (!area) return <p className="field-hint" style={{ margin: 0 }}>Select the visit's division, district and area first.</p>;
+  if (!area) return <p className="field-hint" style={{ margin: 0 }}>Select the visit's division, region and area first.</p>;
   const shown = kinds.filter((k) => ["region", "area", "branch"].includes(k));
   return (
     <div className="office-sel">
       <div className={`office-grid cols-${shown.length}`}>
         {shown.includes("region") && <MultiSelect id={`${idPrefix}-ro`} label={KIND_TITLE.region} options={opts.region} selected={names} onToggle={toggle} placeholder={single ? "Select regional office" : "Select regional offices"} single={single} emptyText="No regional offices in this division." />}
-        {shown.includes("area") && <MultiSelect id={`${idPrefix}-ao`} label={KIND_TITLE.area} options={opts.area} selected={names} onToggle={toggle} placeholder={single ? "Select area office" : "Select area offices"} single={single} emptyText="No area offices in this district." />}
+        {shown.includes("area") && <MultiSelect id={`${idPrefix}-ao`} label={KIND_TITLE.area} options={opts.area} selected={names} onToggle={toggle} placeholder={single ? "Select area office" : "Select area offices"} single={single} emptyText="No area offices in this region." />}
         {shown.includes("branch") && <MultiSelect id={`${idPrefix}-bo`} label={KIND_TITLE.branch} options={opts.branch} selected={names} onToggle={toggle} placeholder={single ? "Select branch office" : "Select branch offices"} single={single} emptyText="No branch offices in this area." />}
       </div>
       {branches.length > 0 && (

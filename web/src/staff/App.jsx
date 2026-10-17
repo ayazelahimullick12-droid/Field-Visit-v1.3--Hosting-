@@ -15,7 +15,7 @@ import { FEATURES } from "../lib/features";
 import BdOutline from "../lib/BdOutline";
 import { CountUp, Reveal, Sparkline, DeltaChip } from "../lib/ui";
 import { buildLocationTree, computeCoverage, monthBuckets, monthKeyOf, DEFAULT_SETTINGS, STATUS_META } from "../lib/offices";
-import { expandVisits, submittedComplaints, phaseOf, PHASES, tripTitle, isoDate, plural, shortName, isDraft, countsOf, placeOffice, inFixerQueue } from "../lib/visits";
+import { purposesOf, expandVisits, submittedComplaints, phaseOf, PHASES, tripTitle, isoDate, plural, shortName, isDraft, countsOf, placeOffice, inFixerQueue } from "../lib/visits";
 import Management, { visibleMgmtTabs, EMPTY_MGMT_VIEW } from "./management/Management";
 import { managementTabOn } from "../lib/features";
 import BranchProfile from "./BranchProfile";
@@ -40,6 +40,7 @@ export default function App() {
   const [employees, , employeesLoaded] = usePersistedCollection("employees", []);
   const [departments] = usePersistedCollection("departments", []);
   const [offices] = usePersistedCollection("offices", []);
+  const [structure] = usePersistedCollection("structure", {}); // regions, areas, regional and area offices
   const [settings] = usePersistedCollection("settings", DEFAULT_SETTINGS);
   // Visits work offline: kept on the phone and sent when there's signal.
   const store = useVisitStore();
@@ -104,7 +105,7 @@ export default function App() {
   const isFixer = roles.includes("fixer");
   // Network health / coverage is admin-only unless the feature switch (src/lib/features.js) says otherwise
   const seesNetwork = isManagement && FEATURES.managementSeesNetworkCoverage;
-  const tree = useMemo(() => buildLocationTree(offices), [offices]);
+  const tree = useMemo(() => buildLocationTree(offices, structure), [offices, structure]);
   const target = settings?.visitTargetDays || DEFAULT_SETTINGS.visitTargetDays;
   const questions = settings?.clientRatingQuestions || [];
   // the analytics, coverage and Branch 360° read one record per office of each visit (submitted entries only)
@@ -248,7 +249,7 @@ export default function App() {
     content = (
       <RegisterVisit
         key={registerCtx.visitId || "new"}
-        tree={tree} visit={editingVisit} prefill={registerCtx.prefill} focusField={registerCtx.focus}
+        tree={tree} purposes={purposesOf(settings)} visit={editingVisit} prefill={registerCtx.prefill} focusField={registerCtx.focus}
         onSave={saveRegistration} onCancel={cancelRegistration}
         onDelete={editingVisit ? () => { store.deleteVisit(editingVisit.id); setRegisterCtx(null); showToast("Visit deleted"); go("dashboard"); } : null}
       />

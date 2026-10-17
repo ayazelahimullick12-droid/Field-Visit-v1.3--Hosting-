@@ -3,26 +3,21 @@ import { Plus, Edit3, Search, Download, Upload, X, MapPin, Target, Trash2, Power
 import { makeId } from "../lib/ids";
 import { Reveal, downloadCsv } from "../lib/ui";
 import { Kpi } from "../staff/analytics/common";
-import {
-  DEFAULT_SETTINGS, DISTRICTS_BY_DIVISION, STATUS_META, computeCoverage, coverageSummary, officeKey,
-  toShapeName, divisionLabelFromShape, districtFromShape, timeAgo,
-} from "../lib/offices";
+import { DEFAULT_SETTINGS, STATUS_META, computeCoverage, coverageSummary, officeKey, timeAgo } from "../lib/offices";
 import { expandVisits, visitsAtOffice } from "../lib/visits";
 import { api } from "../lib/session";
 
-/* Offices master list: the single source for the visit wizard's dropdowns, the
-   coverage maths and the map. Admins add / edit / retire offices here and set
-   the "visited within N days" target that decides who counts as Overdue. */
-
-const DIVISIONS = Object.keys(DISTRICTS_BY_DIVISION).map(divisionLabelFromShape);
-const districtsOf = (division) => (DISTRICTS_BY_DIVISION[toShapeName(division)] || []).map(districtFromShape).sort((a, b) => a.localeCompare(b));
-const ALL_DISTRICTS = DIVISIONS.flatMap((d) => districtsOf(d).map((x) => ({ division: d, district: x })));
+/* Branch offices: the master list behind the visit form's branch dropdown, the coverage maths and
+   the map. Each branch sits in an Area, which gives its Region and Division (regions and areas are
+   set up on the Locations & lists tab). Admins add / edit / retire branches here and set the
+   "visited within N days" target that decides who counts as Overdue.
+   (A branch's region is kept in the field `district`, its older name, which the coverage code reads.) */
 
 // Bangladesh sits roughly between these bounds; anything outside is a typo.
 const LAT = [20.5, 26.8], LNG = [88.0, 92.8];
 const PAGE = 15;
 
-const emptyForm = () => ({ name: "", area: "", division: "", district: "", lat: "", lng: "" });
+const emptyForm = () => ({ name: "", area: "", division: "", district: "", lat: "", lng: "" }); // district = region
 
 /** Minimal RFC-4180-ish CSV reader (quotes, escaped quotes, CRLF, BOM). */
 function parseCsv(text) {
@@ -47,7 +42,10 @@ function parseCsv(text) {
   return rows;
 }
 
-export default function OfficesTab({ offices, setOffices, visits, reloadVisits, settings, setSettings, showToast }) {
+export default function OfficesTab({ offices, setOffices, structure, visits, reloadVisits, settings, setSettings, showToast }) {
+  const DIVISIONS = structure?.divisions || [];
+  const regions = structure?.regions || [];
+  const areas = structure?.areas || [];
   const target = settings?.visitTargetDays || DEFAULT_SETTINGS.visitTargetDays;
   const [targetDraft, setTargetDraft] = useState(String(target));
   const [query, setQuery] = useState("");
@@ -61,7 +59,7 @@ export default function OfficesTab({ offices, setOffices, visits, reloadVisits, 
   const covByKey = useMemo(() => Object.fromEntries(coverage.map((r) => [r.key, r])), [coverage]);
   const sum = useMemo(() => coverageSummary(coverage), [coverage]);
   const inactive = offices.filter((o) => o.active === false).length;
-  const districtsCovered = new Set(coverage.map((o) => o.district)).size;
+  const regionsCovered = new Set(coverage.map((o) => o.district)).size;
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -93,7 +91,7 @@ export default function OfficesTab({ offices, setOffices, visits, reloadVisits, 
 
   const exportCsv = () =>
     downloadCsv(`field-offices-${new Date().toISOString().slice(0, 10)}.csv`, [
-      { label: "Branch", key: "name" }, { label: "Area", key: "area" }, { label: "District", key: "district" }, { label: "Division", key: "division" },
+      { label: "Branch", key: "name" }, { label: "Area", key: "area" }, { label: "Region", key: "district" }, { label: "Division", key: "division" },
       { label: "Latitude", key: "lat" }, { label: "Longitude", key: "lng" }, { label: "Active", get: (o) => (o.active === false ? "no" : "yes") },
     ], offices);
 
@@ -104,8 +102,8 @@ export default function OfficesTab({ offices, setOffices, visits, reloadVisits, 
       if (table.length < 2) { showToast("That file has no data rows."); return; }
       const head = table[0].map((h) => h.trim().toLowerCase());
       const col = (...names) => head.findIndex((h) => names.includes(h));
-      const ci = { name: col("branch", "name", "branch name"), area: col("area"), district: col("district"), division: col("division"), lat: col("latitude", "lat"), lng: col("longitude", "lng", "lon") };
-      if (ci.name < 0 || ci.district < 0) { showToast("The CSV needs at least Branch and District columns."); return; }
+      const ci = { name: col("branch", "name", "branch name"), area: col("area"), district: col("region", "district"), division: col("division"), lat: col("latitude", "lat"), lng: col("longitude", "lng", "lon") };
+      if (ci.name < 0 || ci.district < 0 || ci.area < 0) { showToast("The CSV needs Branch, Area and Region columns."); return; }
 
       const have = new Set(offices.map((o) => officeKey(o).toLowerCase()));
       const fresh = [];
@@ -113,9 +111,9 @@ export default function OfficesTab({ offices, setOffices, visits, reloadVisits, 
       table.slice(1).forEach((r) => {
         const get = (i) => (i >= 0 ? (r[i] || "").trim() : "");
         const name = get(ci.name);
-        // accept either spelling ("Chittagong" / "Chattogram") and resolve the division from the district
-        const hit = ALL_DISTRICTS.find((x) => x.district.toLowerCase() === districtFromShape(get(ci.district)).toLowerCase());
-        const district = hit?.district, div = hit?.division;
+        // the area must already exist under that region (Locations & lists); it gives the division
+        const hit = areas.find((a) => a.region.toLowerCase() === get(ci.district).toLowerCase() && a.name.toLowerCase() === get(ci.area).toLowerCase());
+        const district = hit?.region, div = hit?.division;
         const lat = get(ci.lat) === "" ? null : Number(get(ci.lat));
         const lng = get(ci.lng) === "" ? null : Number(get(ci.lng));
         const coordsOk = (lat == null && lng == null) || (Number.isFinite(lat) && Number.isFinite(lng) && lat >= LAT[0] && lat <= LAT[1] && lng >= LNG[0] && lng <= LNG[1]);
@@ -123,10 +121,10 @@ export default function OfficesTab({ offices, setOffices, visits, reloadVisits, 
         const key = `${district}::${name}`.toLowerCase();
         if (have.has(key)) { dup++; return; }
         have.add(key);
-        fresh.push({ id: makeId("OFF"), name, type: "branch", division: div, district, area: get(ci.area) || `${name.replace(/ Branch$/i, "")} Area`, lat, lng, active: true });
+        fresh.push({ id: makeId("OFF"), name, type: "branch", division: div, district, region: district, area: hit.name, lat, lng, active: true });
       });
       if (fresh.length) setOffices((os) => [...os, ...fresh]);
-      showToast(`Imported ${fresh.length} office${fresh.length === 1 ? "" : "s"}${dup ? ` · ${dup} already existed` : ""}${bad ? ` · ${bad} skipped (unknown district or bad data)` : ""}.`);
+      showToast(`Imported ${fresh.length} office${fresh.length === 1 ? "" : "s"}${dup ? ` · ${dup} already existed` : ""}${bad ? ` · ${bad} skipped (region/area not on the Locations list, or bad data)` : ""}.`);
     } catch {
       showToast("Couldn't read that file.");
     } finally {
@@ -139,20 +137,20 @@ export default function OfficesTab({ offices, setOffices, visits, reloadVisits, 
       <div className="page-head">
         <div>
           <p className="h-eyebrow">Configuration</p>
-          <h1 className="h-title">Field offices</h1>
-          <p className="h-desc">The master list behind the visit wizard, the coverage map and management's "never visited" tracking.</p>
+          <h1 className="h-title">Branch offices</h1>
+          <p className="h-desc">The branches behind the visit form, the coverage map and management's "never visited" tracking. Each branch sits in an Area of a Region. Add regions, areas, regional and area offices on <b>Locations &amp; lists</b>.</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}><Upload size={14} /> Import CSV</button>
           <button className="btn btn-secondary btn-sm" onClick={exportCsv}><Download size={14} /> Export CSV</button>
-          <button className="btn btn-primary btn-sm" onClick={() => setEditing("new")}><Plus size={14} strokeWidth={2.6} /> Add office</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setEditing("new")}><Plus size={14} strokeWidth={2.6} /> Add branch</button>
           <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => importCsv(e.target.files?.[0])} />
         </div>
       </div>
 
       <div className="kpi-grid" style={{ marginBottom: 18 }}>
         <Reveal i={0}><Kpi icon={MapPin} tone="green" label="Active offices" value={sum.total} /></Reveal>
-        <Reveal i={1}><Kpi icon={Target} label="Districts covered" value={districtsCovered} foot={<span className="pill pill-brand">of 64</span>} /></Reveal>
+        <Reveal i={1}><Kpi icon={Target} label="Regions with branches" value={regionsCovered} foot={<span className="pill pill-brand">of {regions.length}</span>} /></Reveal>
         <Reveal i={2}><Kpi icon={MapPin} tone="red" label="Never visited" value={sum.never} /></Reveal>
         <Reveal i={3}><Kpi icon={MapPin} tone="amber" label={`Overdue (> ${target} days)`} value={sum.stale} /></Reveal>
         <Reveal i={4}><Kpi icon={Power} tone="blue" label="Retired" value={inactive} /></Reveal>
@@ -182,7 +180,7 @@ export default function OfficesTab({ offices, setOffices, visits, reloadVisits, 
       <div className="toolbar">
         <div className="search-box">
           <Search size={16} />
-          <input className="input" placeholder="Search branch, area, district…" value={query} onChange={(e) => { setQuery(e.target.value); setShowAll(false); }} />
+          <input className="input" placeholder="Search branch, area, region…" value={query} onChange={(e) => { setQuery(e.target.value); setShowAll(false); }} />
         </div>
         <select className="select" style={{ width: "auto", minWidth: 170 }} value={division} onChange={(e) => { setDivision(e.target.value); setShowAll(false); }} aria-label="Division">
           <option value="All">All divisions</option>
@@ -239,17 +237,17 @@ export default function OfficesTab({ offices, setOffices, visits, reloadVisits, 
 
       {editing && (
         <OfficeModal
-          office={editing === "new" ? null : editing} offices={offices} visits={visits}
+          office={editing === "new" ? null : editing} offices={offices} visits={visits} structure={structure}
           onClose={() => setEditing(null)}
           onSave={(form, existing) => {
             if (existing) {
               const changed = existing.name !== form.name || existing.district !== form.district || existing.area !== form.area || existing.division !== form.division;
-              setOffices((os) => os.map((x) => (x.id === existing.id ? { ...x, ...form } : x)));
+              setOffices((os) => os.map((x) => (x.id === existing.id ? { ...x, ...form, region: form.district } : x)));
               // the server updates the past visits itself (each one locked), so nothing staff saved meanwhile is lost
               if (changed) api("/actions/relink-office", { method: "POST", body: { existing, form } }).then(reloadVisits).catch((err) => showToast(err.message));
               showToast(`${form.name} updated${changed ? " — its past visits were relinked." : "."}`);
             } else {
-              setOffices((os) => [...os, { id: makeId("OFF"), type: "branch", active: true, ...form }]);
+              setOffices((os) => [...os, { id: makeId("OFF"), type: "branch", active: true, ...form, region: form.district }]);
               showToast(`${form.name} added — it's now selectable in the visit wizard and on the map.`);
             }
             setEditing(null);
@@ -265,30 +263,31 @@ export default function OfficesTab({ offices, setOffices, visits, reloadVisits, 
   );
 }
 
-function OfficeModal({ office, offices, visits, onClose, onSave, onDelete }) {
+function OfficeModal({ office, offices, visits, structure, onClose, onSave, onDelete }) {
   const [form, setForm] = useState(() => office
     ? { name: office.name, area: office.area, division: office.division, district: office.district, lat: office.lat ?? "", lng: office.lng ?? "" }
     : emptyForm());
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const districts = districtsOf(form.division);
-  const areaHints = [...new Set(offices.filter((o) => o.district === form.district).map((o) => o.area))];
+  const DIVISIONS = structure?.divisions || [];
+  const regionsHere = (structure?.regions || []).filter((r) => r.division === form.division && (r.active !== false || r.name === form.district));
+  const areasHere = (structure?.areas || []).filter((a) => a.region === form.district && (a.active !== false || a.name === form.area));
   const visitCount = office ? visitsAtOffice(visits, office) : 0;
   const set = (patch) => { setForm((f) => ({ ...f, ...patch })); setError(""); };
 
   const submit = () => {
     const name = form.name.trim(), area = form.area.trim();
     if (!name) return setError("Branch name is required.");
-    if (!form.division || !form.district) return setError("Choose a division and a district.");
-    if (!area) return setError("Area is required — it groups branches under one area office.");
+    if (!form.division || !form.district) return setError("Choose the division and the region.");
+    if (!area) return setError("Choose the area the branch is in.");
     const lat = form.lat === "" ? null : Number(form.lat), lng = form.lng === "" ? null : Number(form.lng);
     if ((lat == null) !== (lng == null)) return setError("Give both latitude and longitude, or leave both empty.");
     if (lat != null && !(Number.isFinite(lat) && Number.isFinite(lng) && lat >= LAT[0] && lat <= LAT[1] && lng >= LNG[0] && lng <= LNG[1])) {
       return setError(`Those coordinates fall outside Bangladesh (latitude ${LAT[0]}–${LAT[1]}, longitude ${LNG[0]}–${LNG[1]}).`);
     }
     const clash = offices.some((o) => o.id !== office?.id && o.district === form.district && o.name.toLowerCase() === name.toLowerCase());
-    if (clash) return setError(`${form.district} already has a branch called "${name}".`);
+    if (clash) return setError(`Region ${form.district} already has a branch called "${name}".`);
     onSave({ name, area, division: form.division, district: form.district, lat, lng }, office);
   };
 
@@ -298,7 +297,7 @@ function OfficeModal({ office, offices, visits, onClose, onSave, onDelete }) {
         <div className="modal-head">
           <div>
             <span className="mono" style={{ fontSize: 12, color: "var(--ink-faint)" }}>{office ? office.id : "New office"}</span>
-            <h1 className="h-title" style={{ fontSize: 19, marginTop: 2 }}>{office ? "Edit office" : "Add a field office"}</h1>
+            <h1 className="h-title" style={{ fontSize: 19, marginTop: 2 }}>{office ? "Edit branch office" : "Add a branch office"}</h1>
           </div>
           <button className="modal-close" onClick={onClose} aria-label="Close"><X size={15} /></button>
         </div>
@@ -307,24 +306,26 @@ function OfficeModal({ office, offices, visits, onClose, onSave, onDelete }) {
           <div className="field-row">
             <div className="field-group">
               <label className="field-label">Division</label>
-              <select className="select" value={form.division} onChange={(e) => set({ division: e.target.value, district: "" })}>
+              <select className="select" value={form.division} onChange={(e) => set({ division: e.target.value, district: "", area: "" })}>
                 <option value="">Select division…</option>
                 {DIVISIONS.map((d) => <option key={d}>{d}</option>)}
               </select>
             </div>
             <div className="field-group">
-              <label className="field-label">District</label>
-              <select className="select" value={form.district} onChange={(e) => set({ district: e.target.value })} disabled={!form.division}>
-                <option value="">Select district…</option>
-                {districts.map((d) => <option key={d}>{d}</option>)}
+              <label className="field-label">Region</label>
+              <select className="select" value={form.district} onChange={(e) => set({ district: e.target.value, area: "" })} disabled={!form.division}>
+                <option value="">{regionsHere.length ? "Select region…" : "No regions in this division yet"}</option>
+                {regionsHere.map((r) => <option key={r.id}>{r.name}</option>)}
               </select>
             </div>
           </div>
           <div className="field-row">
             <div className="field-group">
-              <label className="field-label">Area office</label>
-              <input className="input" list="area-hints" placeholder="e.g. Savar Area" value={form.area} onChange={(e) => set({ area: e.target.value })} />
-              <datalist id="area-hints">{areaHints.map((a) => <option key={a} value={a} />)}</datalist>
+              <label className="field-label">Area</label>
+              <select className="select" value={form.area} onChange={(e) => set({ area: e.target.value })} disabled={!form.district}>
+                <option value="">{areasHere.length || !form.district ? "Select area…" : "No areas in this region yet"}</option>
+                {areasHere.map((a) => <option key={a.id}>{a.name}</option>)}
+              </select>
             </div>
             <div className="field-group">
               <label className="field-label">Branch name</label>
@@ -342,18 +343,18 @@ function OfficeModal({ office, offices, visits, onClose, onSave, onDelete }) {
             </div>
           </div>
           <p style={{ fontSize: 11.5, color: "var(--ink-faint)", margin: "-4px 0 14px" }}>
-            Coordinates place the pin exactly on the map. Without them the pin is drawn approximately inside its district.
+            Coordinates place the pin exactly on the map. Without them the pin is drawn approximately.
           </p>
 
           {office && (office.name !== form.name.trim() || office.district !== form.district) && visitCount > 0 && (
             <div className="auto-assign-box" style={{ marginBottom: 14 }}>
-              This office has {visitCount} past visit{visitCount === 1 ? "" : "s"} — they'll be relinked to the new name / district when you save.
+              This office has {visitCount} past visit{visitCount === 1 ? "" : "s"} — they'll be relinked to the new name / region when you save.
             </div>
           )}
           {error && <div className="form-error" role="alert">{error}</div>}
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            <button className="btn btn-primary" onClick={submit}>{office ? "Save changes" : "Add office"}</button>
+            <button className="btn btn-primary" onClick={submit}>{office ? "Save changes" : "Add branch"}</button>
             <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
             {office && visitCount === 0 && (
               <button className={`btn ${confirmDelete ? "btn-danger" : "btn-ghost"}`} style={{ marginLeft: "auto" }}

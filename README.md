@@ -15,7 +15,8 @@ field-visit-tracker/
 │       ├── app.module.ts           list of every controller/service
 │       ├── auth/                   sign-in, registration, who-may-call-what (access.ts)
 │       ├── people/                 employees and admin accounts
-│       ├── reference-data/         units/teams, offices, settings, email log
+│       ├── reference-data/         units/teams, settings, email log
+│       ├── structure/              Division → Region → Area → Branch, regional/area/branch offices
 │       ├── visits/                 saving visits; visit-rules.ts = the rules
 │       ├── action-items/           assign / extend / start / fixed / long term / reminders,
 │       │                           story likes and comments; action-items.logic.ts = the rules
@@ -52,7 +53,7 @@ Works on Linux (recommended: Ubuntu 22.04/24.04) or Windows Server.
 2. Create the database:
    ```sql
    CREATE USER fvt WITH PASSWORD 'a-strong-password';
-   CREATE DATABASE fvt OWNER fvt;
+   CREATE DATABASE fvt OWNER fvt ENCODING 'UTF8' TEMPLATE template0;
    ```
 3. Copy this folder to the server (e.g. `/opt/field-visit-tracker`), then in `api/`:
    copy `.env.example` to `.env` and fill in `DATABASE_URL`, `APP_SECRET` (long random string),
@@ -75,11 +76,31 @@ Works on Linux (recommended: Ubuntu 22.04/24.04) or Windows Server.
 7. Sign in at `/` → **Admin** with the seed admin PIN, then:
    - **Email settings**: enter the sending account (SMTP host, port, username, password,
      "send from" address) and **Send test**.
-   - **Units**, **Offices**, **Employees**: set up the real data. Staff can also create their own
+   - **Locations & lists**: add the Regions (each in a Division), the Areas (each in a Region),
+     the Regional Offices (each in a Division), the Area Offices (each in a Region) and the
+     Purposes of visit.
+   - **Branch offices**: add the branches (each in an Area), one by one or by CSV
+     (columns `Branch, Area, Region, Division, Latitude, Longitude`).
+   - **Units**, **Employees**: set up the real data. Staff can also create their own
      accounts with their work email.
 
 **Updating later:** copy the new code, then `npm run setup && npm run build && npm run db:migrate`,
 and restart the service.
+
+## Locations
+
+**Division → Region → Area → Branch.** Divisions are the 8 government divisions (fixed, in
+`api/src/structure/divisions.ts`). Regions and Areas are BRAC's own and are managed in
+**Admin → Locations & lists**. On the visit form, staff pick Division → Region → Area, then:
+
+| Picker | Shows |
+|---|---|
+| Regional Office | the Regional Offices of the chosen Division |
+| Area Office | the Area Offices of the chosen Region |
+| Branch Office | the branches of the chosen Area |
+
+Renaming or moving a Region or Area also updates its offices and past visits. A Region or Area
+that still has offices can't be deleted; switch it off instead (it disappears from the visit form).
 
 ## How emails work
 

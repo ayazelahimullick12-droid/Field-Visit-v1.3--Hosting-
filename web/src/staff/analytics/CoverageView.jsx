@@ -60,7 +60,7 @@ export default function CoverageView({ coverage, offices, visits, target, loc, s
 
   const exportCsv = () =>
     downloadCsv(`office-coverage-${new Date().toISOString().slice(0, 10)}.csv`, [
-      { label: "Branch", key: "name" }, { label: "Area", key: "area" }, { label: "District", key: "district" }, { label: "Division", key: "division" },
+      { label: "Branch", key: "name" }, { label: "Area", key: "area" }, { label: "Region", key: "district" }, { label: "Division", key: "division" },
       { label: "Status", get: (r) => STATUS_META[r.status].label }, { label: "Last visit", get: (r) => r.lastDate || "" },
       { label: "Days since last visit", get: (r) => r.daysSince ?? "" }, { label: "Visits", key: "visitCount" },
       { label: "Avg rating", get: (r) => (r.avgRating == null ? "" : r.avgRating.toFixed(1)) }, { label: "Open action items", key: "openComplaints" },
@@ -75,7 +75,7 @@ export default function CoverageView({ coverage, offices, visits, target, loc, s
       <div className={mapOnly ? "" : "cov-grid"}>
         <MapPanel
           title="Field-office coverage map"
-          sub="Select a division to zoom in, then a district and an area. Drag to pan; use Ctrl + scroll to zoom."
+          sub="Select a division to zoom in, then a region and an area. Drag to pan; use Ctrl + scroll to zoom."
           filters={<LocationFilterBar offices={offices} value={loc} onChange={setLoc} labelled />}
           canClear={filtered} onClear={() => setLoc(EMPTY_LOCATION_FILTER)}
         >
@@ -167,7 +167,7 @@ export default function CoverageView({ coverage, offices, visits, target, loc, s
         <div className="toolbar">
           <div className="search-box">
             <Search size={16} />
-            <input className="input" placeholder="Search branch, area, district…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input className="input" placeholder="Search branch, area, region…" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <div className="filter-chips">
             {[["all", "All"], ["never", "Never visited"], ["stale", "Overdue"], ["ok", "On track"]].map(([k, label]) => (

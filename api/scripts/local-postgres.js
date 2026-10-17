@@ -10,7 +10,11 @@ const EmbeddedPostgres = require('embedded-postgres').default;
 
 const dir = path.resolve(__dirname, '../.local-pg');
 const fresh = !fs.existsSync(path.join(dir, 'PG_VERSION'));
-const pg = new EmbeddedPostgres({ databaseDir: dir, user: 'postgres', password: 'postgres', port: 5433, persistent: true });
+// UTF8 so Bangla text can be stored (Windows would otherwise pick its own code page)
+const pg = new EmbeddedPostgres({
+  databaseDir: dir, user: 'postgres', password: 'postgres', port: 5433, persistent: true,
+  initdbFlags: ['--encoding=UTF8', '--locale=C'],
+});
 
 (async () => {
   if (fresh) await pg.initialise();

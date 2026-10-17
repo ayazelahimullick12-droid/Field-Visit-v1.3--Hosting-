@@ -59,13 +59,41 @@ model Unit {
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
 }
 
-// Branches, area offices and region offices (master list maintained by the admin).
+// ---- Where things are: Division → Region → Area → Branch ----
+// Divisions are the 8 government divisions (fixed, see api/src/structure/divisions.ts).
+// Regions and Areas are BRAC's own and are maintained by the admin.
+
+model Region {
+  id        String  @id
+  name      String  @unique
+  division  String // e.g. "Dhaka Division"
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+  areas     Area[]
+}
+
+model Area {
+  id        String  @id
+  name      String
+  regionId  String
+  region    Region  @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  @@unique([regionId, name])
+}
+
+// Every office, by type:
+//   "region" = Regional Office: placed in a Division
+//   "area"   = Area Office:     placed in a Region (and so its Division)
+//   "branch" = Branch Office:   placed in an Area (and so its Region and Division)
+// The place is stored by name, as visits store it.
 model Office {
   id        String  @id
   name      String
   type      String  @default("branch")
   division  String?
-  district  String?
+  region    String?
   area      String?
   lat       Float?
   lng       Float?
