@@ -12,12 +12,11 @@ import { login, register } from "./session";
  * - icon, title, subtitle: branding for whichever app is rendering this
  * - requireRole: if set (e.g. "fixer"), only employees carrying that role
  *   may log in here, and new registrations are tagged with it
- * - demoHint: small footer text pointing at seeded demo credentials
  * - footerExtra: optional extra content (e.g. an SSO button) rendered right
  *   after the sign-in/register form, before the footer note
  */
 export default function AuthScreen({
-  onRegister, onLogin, icon, title, subtitle, requireRole, demoHint, footerExtra, embedded,
+  onRegister, onLogin, icon, title, subtitle, requireRole, footerExtra, embedded,
 }) {
   const [mode, setMode] = useState("login"); // "login" | "register"
 
@@ -184,7 +183,7 @@ export default function AuthScreen({
 
         <p className="login-footer">
           Use your work email: action item emails are sent there if you become a fixer.
-          {demoHint && <><br />{demoHint}</>}
+
         </p>
       </div>
     </Outer>
