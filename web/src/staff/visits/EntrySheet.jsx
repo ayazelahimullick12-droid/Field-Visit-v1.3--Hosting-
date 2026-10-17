@@ -30,12 +30,15 @@ export const ENTRY_KINDS = {
   interaction: ["branch"],
   story: [],
 };
+// Entry types that are about exactly one office (plus, optionally, one VO under a branch office).
+const ONE_OFFICE = ["complaint", "observation"];
 const allowedPlace = (type, p) => (ENTRY_KINDS[type].includes(p.officeKind) || (p.officeKind === "vo" && ENTRY_KINDS[type].includes("branch")));
 
 /** The offices a new entry starts with: the last ones used on this visit, or its only planned office. */
 export function defaultPlaces(v, type) {
   const last = (v.lastPlaces || (v.lastPlace?.office ? [v.lastPlace] : [])).filter((p) => allowedPlace(type, p));
-  if (last.length) return last;
+  const offices = (list) => list.filter((p) => p.officeKind !== "vo").length;
+  if (last.length && !(ONE_OFFICE.includes(type) && offices(last) > 1)) return last;
   const planned = (v.stops || []).map((s) => placeOfStop(s, v)).filter((p) => allowedPlace(type, p));
   return planned.length === 1 ? planned : [];
 }
@@ -78,7 +81,11 @@ export function whyNotReady(type, d, departments) {
     if (!d.caption.trim()) return "Enter a description for the story.";
     return "";
   }
-  if (type === "observation") { if (!said && !d.photoUrl) return "Add a description, a voice note or a photo."; }
+  if (type === "observation") {
+    if (!said && !d.photoUrl) return "Add a description, a voice note or a photo.";
+    // an observation is about exactly one office (regional, area or branch), optionally a VO under its branch
+    if ((d.places || []).filter((p) => p.officeKind !== "vo").length > 1) return "Select only one office.";
+  }
   else if (type === "interaction") {
     if (!said && !Object.values(d.ratings).some((n) => n > 0)) return "Record the client's feedback or rate at least one question.";
   } else {
@@ -88,7 +95,7 @@ export function whyNotReady(type, d, departments) {
     // an action item is about exactly one office (regional, area or branch), optionally a VO under its branch
     if ((d.places || []).filter((p) => p.officeKind !== "vo").length > 1) return "Select only one office.";
   }
-  if (!(d.places || []).length) return type === "interaction" ? "Select the branch office or VO." : type === "complaint" ? "Select the office." : "Select at least one office.";
+  if (!(d.places || []).length) return type === "interaction" ? "Select the branch office or VO." : ONE_OFFICE.includes(type) ? "Select the office." : "Select at least one office.";
   return "";
 }
 
@@ -207,10 +214,10 @@ export default function EntrySheet({ type, entry, visit, tree, departments, ques
   );
   const location = (
     <fieldset className="form-sec" ref={placeRef}>
-      <legend><MapPin size={14} /> {type === "interaction" ? "Branch office / VO" : type === "complaint" ? "Office" : "Office(s)"} {req}</legend>
+      <legend><MapPin size={14} /> {type === "interaction" ? "Branch office / VO" : "Office"} {req}</legend>
       <OfficeSelector tree={tree} division={visit.division} region={visit.region} area={visit.area}
-                      value={d.places} onChange={(places) => set({ places })} kinds={ENTRY_KINDS[type]} single={type === "complaint"} idPrefix="entry" />
-      <p className="field-hint" style={{ marginBottom: 0 }}>{type === "complaint" ? "Select one office: a regional, area or branch office. A VO can be added under a branch office. " : ""}Offices are listed for the visit area ({[visit.region, visit.area].filter(Boolean).join(" · ") || "not set"}). To change the area, use <b>Change</b> on the visit details.</p>
+                      value={d.places} onChange={(places) => set({ places })} kinds={ENTRY_KINDS[type]} single={ONE_OFFICE.includes(type)} idPrefix="entry" />
+      <p className="field-hint" style={{ marginBottom: 0 }}>{ONE_OFFICE.includes(type) ? "Select one office: a regional, area or branch office. A VO can be added under a branch office. " : ""}Offices are listed for the visit area ({[visit.region, visit.area].filter(Boolean).join(" · ") || "not set"}). To change the area, use <b>Change</b> on the visit details.</p>
     </fieldset>
   );
 
