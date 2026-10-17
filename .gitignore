@@ -1,0 +1,8 @@
+node_modules/
+.env
+api/dist/
+api/uploads/
+api/.local-pg/
+web/.next/
+web/out/
+*.log

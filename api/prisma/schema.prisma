@@ -1,0 +1,111 @@
+// Database tables for the Field Visit Tracker.
+//
+// People, units, offices and settings are normal tables. A visit is stored as one
+// JSON document (column `data`) holding its route, stays and every entry
+// (action items, client interactions, observations, stories) exactly as the
+// screens use it, with a few columns copied out of it for searching.
+// Adding a new field to an entry form therefore needs no database change.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Staff who use the staff app: base users ("field"), fixers and management.
+model Employee {
+  id           String   @id
+  name         String
+  phone        String?
+  email        String?  // where action item emails go when this person is a fixer
+  pin          String   @unique
+  passwordHash String
+  roles        String[] // "field" | "fixer" | "management"
+  departmentId String?  // the unit (Department) a fixer belongs to
+  supervisorId String?
+  designation  String?
+  department   String?  // the staff department (Microfinance, HR, ...), used by the Summary filter
+  title        String?
+  createdAt    DateTime @default(now())
+}
+
+// People who sign in to the admin console.
+model AdminUser {
+  id           String   @id
+  name         String
+  email        String?
+  pin          String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+// A "Unit" on screen (e.g. Software). Its teams are the Unit rows below.
+model Department {
+  id        String @id
+  name      String
+  sortOrder Int    @default(0)
+  units     Unit[]
+}
+
+// A "Team" on screen (e.g. IT Support), inside a Department.
+model Unit {
+  id           String     @id
+  name         String
+  sortOrder    Int        @default(0)
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+}
+
+// Branches, area offices and region offices (master list maintained by the admin).
+model Office {
+  id        String  @id
+  name      String
+  type      String  @default("branch")
+  division  String?
+  district  String?
+  area      String?
+  lat       Float?
+  lng       Float?
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+}
+
+model Visit {
+  id         String   @id
+  employeeId String
+  status     String   @default("open") // "open" | "done"
+  date       String? // visiting date, YYYY-MM-DD
+  data       Json // the whole visit document
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([date])
+}
+
+// Key/value settings. "app" holds what every screen reads (visit target, rating
+// questions, management tabs). "smtp" holds the mail server and is never sent
+// to the browser with its password.
+model Setting {
+  key   String @id
+  value Json
+}
+
+// Every email the system sends (or tried to send).
+model EmailLog {
+  id          String   @id
+  complaintId String?
+  to          String
+  toName      String?
+  type        String
+  subject     String
+  body        String
+  status      String   @default("sent") // "sent" | "failed" | "not-sent"
+  error       String?
+  sentAt      DateTime @default(now())
+
+  @@index([sentAt])
+}
