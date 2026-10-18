@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
-  Route, Wrench, Star, Eye, RotateCcw, MapPin, CalendarClock, Building2, CalendarDays, ClipboardList, CheckCircle2, AlarmClock,
+  Route, Wrench, Star, Eye, RotateCcw, MapPin, CalendarClock, Building2, ClipboardList, CheckCircle2, AlarmClock,
   Smile, Users, UserCheck, Image as ImageIcon, Heart, MessageCircle, Share2, ArrowUpRight, ArrowDownRight, Minus,
 } from "lucide-react";
 import { LocationFilterBar, EMPTY_LOCATION_FILTER, matchesLocation } from "../analytics/common";
@@ -35,11 +35,6 @@ const DEFAULT_FILTERS = { period: "30d", from: "", to: "", loc: EMPTY_LOCATION_F
 const filedOn = (c) => c.submittedAt || c.filedDate || c.visitDate;
 const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
 const one = (n) => (n == null ? "—" : Number(n.toFixed(1)).toString());
-const median = (list) => {
-  if (!list.length) return null;
-  const s = [...list].sort((a, b) => a - b);
-  return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
-};
 const inRange = (d, from, to) => {
   if (!from && !to) return true;
   if (!d) return false;
@@ -97,10 +92,6 @@ export function figures({ trips, records, offices, settings, f }) {
   const upcoming = visitsHere.filter((v) => phaseOf(v) === "upcoming");
   const weekAhead = new Date(Date.now() + 7 * DAY_MS);
 
-  // --- how long visits last (visit date to return date, both days counted) ---
-  const lengths = visits.filter((v) => v.returnDate && v.returnDate >= v.date)
-    .map((v) => Math.round((new Date(`${v.returnDate}T00:00`) - new Date(`${v.date}T00:00`)) / DAY_MS) + 1);
-
   // --- why, and when in the day ---
   const reasons = countBy(visits, (v) => reasonText(v) || "Not given");
   const shownReasons = reasons.slice(0, 4);
@@ -149,7 +140,6 @@ export function figures({ trips, records, offices, settings, f }) {
     upcoming: upcoming.length,
     upcomingThisWeek: upcoming.filter((v) => new Date(`${v.date}T00:00`) <= weekAhead).length,
     upcomingOffices: new Set(upcoming.flatMap((v) => (v.stops || []).map((x) => x.name))).size,
-    typicalDays: median(lengths), longestDays: lengths.length ? Math.max(...lengths) : null,
     reasons: [...shownReasons, ...(otherReasons ? [["Other purposes", otherReasons]] : [])],
 
     raised: raised.length, raisedBefore, fixed: fixed.length, open: open.length,
@@ -227,22 +217,7 @@ export default function Summary({ trips, records, offices = [], settings, period
       </div>
 
       <Section icon={Route} tone={TONES.visits} title="Field visits">
-        <div className="s1-grid">
-          <Tile icon={MapPin} tone={TONES.visits} label="Visits made" value={F.visits}
-                change={trend(F.visits, F.visitsBefore, words.prev)}
-                note={`Trips staff registered to field offices, by ${plural(F.staff, "staff member")}.`} />
-          <Tile icon={Building2} tone={TONES.visits} label="Branches visited" value={F.visitedInPeriod} of={`of ${F.branches}`}
-                progress={F.branches ? F.visitedInPeriod / F.branches : null}
-                note={`${pct(F.visitedInPeriod, F.branches)}% of branches had at least one visit in this period.`} />
-          <Tile icon={CalendarClock} tone={TONES.visits} label="Upcoming visits" value={F.upcoming} of={F.upcoming ? "planned" : ""}
-                note={F.upcoming ? `Visits staff have registered for a date after today${F.upcomingOffices ? `, to ${plural(F.upcomingOffices, "office")}` : ""}. ${F.upcomingThisWeek} of them ${F.upcomingThisWeek === 1 ? "is" : "are"} in the next 7 days.` : "No visits are registered for a date after today."} />
-          <Tile icon={CalendarDays} tone={TONES.visits} label="Typical visit length" value={F.typicalDays == null ? "—" : one(F.typicalDays)} of={F.typicalDays == null ? "" : F.typicalDays === 1 ? "day" : "days"}
-                note={F.typicalDays == null ? "No visits with both dates in this period." : `Half of the visits took this long or less. The longest took ${plural(F.longestDays, "day")}.`} />
-        </div>
-        <div className="s1-grid s1-wide">
-          <SplitBar label="Purpose of visit" note="The purpose chosen when the visit was registered."
-                    parts={F.reasons.map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }))} />
-        </div>
+        <VisitsPanel F={F} words={words} />
       </Section>
 
       <Section icon={Wrench} tone={TONES.issues} title="Issues found" sub="Action items registered in this period, and where each one stands today.">
@@ -347,6 +322,60 @@ function Tile({ icon: Icon, tone, label, value, of, progress, change: ch, note, 
       )}
       {extra}
       {note && <p className="s1-note">{note}</p>}
+    </div>
+  );
+}
+
+/**
+ * Field visits in one card: visits made (with the change from the period before) on the left,
+ * branches visited and upcoming visits on the right, and the purpose of visit along the bottom.
+ */
+function VisitsPanel({ F, words }) {
+  const ch = trend(F.visits, F.visitsBefore, words.prev);
+  const purposes = F.reasons.map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }));
+  const total = purposes.reduce((n, p) => n + p.value, 0);
+  return (
+    <div className="card s1-tile s1-panel" style={{ "--tone": TONES.visits }}>
+      <div className="s1-panel-top">
+        <div className="s1-panel-main">
+          <div className="s1-top"><p className="s1-label">Visits made · {words.now.toLowerCase()}</p><MapPin size={17} className="s1-icon" /></div>
+          <p className="s1-num s1-big">{F.visits}</p>
+          {ch && (
+            <span className={`s1-trend ${ch.mood}`}>
+              {ch.mood === "flat" ? <Minus size={12} /> : ch.up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />} {ch.text}
+            </span>
+          )}
+          <p className="s1-note">Trips staff registered to field offices, by {plural(F.staff, "staff member")}, to {plural(F.officesReached, "office")}.</p>
+        </div>
+        <div className="s1-panel-side">
+          <div className="s1-mini">
+            <div className="s1-top"><span className="s1-label">Branches visited</span><Building2 size={15} className="s1-icon" /></div>
+            <p className="s1-num">{F.visitedInPeriod}<span className="s1-of"> of {F.branches}</span></p>
+            <div className="s1-progress"><span style={{ width: `${F.branches ? Math.round((F.visitedInPeriod / F.branches) * 100) : 0}%` }} /></div>
+            <p className="s1-note">{pct(F.visitedInPeriod, F.branches)}% of branches had at least one visit.</p>
+          </div>
+          <div className="s1-mini">
+            <div className="s1-top"><span className="s1-label">Upcoming visits</span><CalendarClock size={15} className="s1-icon" /></div>
+            <p className="s1-num">{F.upcoming}<span className="s1-of"> planned</span></p>
+            <p className="s1-note">
+              {F.upcoming
+                ? `Registered for after today${F.upcomingOffices ? `, to ${plural(F.upcomingOffices, "office")}` : ""}. ${F.upcomingThisWeek} in the next 7 days.`
+                : "No visits are registered for a date after today."}
+            </p>
+          </div>
+        </div>
+      </div>
+      <div className="s1-panel-purpose">
+        <p className="s1-label">Purpose of visit</p>
+        {total === 0 ? <p className="s1-note">No visits in this period.</p> : (
+          <>
+            <div className="s1-bar" role="img" aria-label={purposes.map((p) => `${p.label}: ${p.value}`).join(", ")}>
+              {purposes.map((p) => <span key={p.label} title={`${p.label}: ${p.value}`} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />)}
+            </div>
+            <div className="s1-legend">{purposes.map((p) => <span key={p.label}><i style={{ background: p.color }} />{p.label} <b>{p.value}</b></span>)}</div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -1448,3 +1448,15 @@ button.story-photo{ border:0; padding:0; cursor:pointer; font:inherit; color:inh
   .s1-uval{ grid-column:2; text-align:left; }
 }
 @media (prefers-reduced-motion:reduce){ .s1-tile, .s1-progress span, .s1-dbar{ transition:none; } .s1-tile:hover{ transform:none; } }
+
+/* the single Field visits panel */
+.s1-panel{ margin-top:12px; }
+.s1-panel-top{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.6fr); gap:18px; align-items:stretch; }
+.s1-big{ font-size:44px; line-height:1.05; margin-top:4px; }
+.s1-panel-side{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.s1-mini{ background:var(--paper, var(--line-soft)); border:1px solid var(--line-soft); border-radius:12px; padding:12px 14px; min-width:0; }
+.s1-mini .s1-num{ font-size:24px; }
+.s1-panel-purpose{ margin-top:16px; padding-top:14px; border-top:1px solid var(--line-soft); }
+.s1-panel-purpose .s1-bar{ margin-top:8px; }
+@media (max-width:760px){ .s1-panel-top{ grid-template-columns:1fr; } }
+@media (max-width:420px){ .s1-panel-side{ grid-template-columns:1fr; } .s1-big{ font-size:38px; } }
