@@ -47,7 +47,7 @@ export default function App() {
               <h1 className="h-title">Field visits at a glance</h1>
               <p className="h-desc">
                 {data ? `As of ${data.at.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}. ` : ""}
-                Field visits, problems found, what clients told us, observations and stories. A read-only snapshot.
+                Field visits, issues found, observations, clients reached and stories. A read-only snapshot.
               </p>
             </div>
           </div>

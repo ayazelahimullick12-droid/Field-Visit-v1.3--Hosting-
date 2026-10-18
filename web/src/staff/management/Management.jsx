@@ -11,7 +11,7 @@ import { peopleList } from "./data";
 import { PeriodSelect } from "./periods";
 
 export const MGMT_TABS = [
-  { key: "summary", label: "Summary", icon: LayoutDashboard, desc: "The whole programme on one page, in plain words: field visits, problems found, what clients told us, observations and stories. Filter by time and place." },
+  { key: "summary", label: "Summary", icon: LayoutDashboard, desc: "The whole programme on one page, in plain words: field visits, issues found, observations, clients reached and stories. Filter by time and place." },
   { key: "offices", label: "Offices", icon: Building2, desc: "Whether every branch is being visited (the coverage map), and how often each branch, village organisation (VO), area and region office is visited, by whom, and what was recorded there." },
   { key: "people", label: "People", icon: Users, desc: "Everyone who makes visits: how many, where, how complete, and their full visit history." },
   { key: "analytics", label: "Analytics", icon: BarChart3, desc: "Visits and action items in depth: ratings, visit reasons, offices reached, and the path from action item to resolution." },
