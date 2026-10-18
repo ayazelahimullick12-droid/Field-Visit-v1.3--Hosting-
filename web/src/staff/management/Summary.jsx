@@ -239,9 +239,6 @@ export default function Summary({ trips, records, offices = [], employees = [], 
 
       <Section icon={Route} tone={TONES.visits} title="Field visits">
         <VisitsPanel F={F} words={words} />
-        <div className="s1-grid s1-wide">
-          <UnitVisits rows={F.visitsByUnit} />
-        </div>
       </Section>
 
       <Section icon={Wrench} tone={TONES.issues} title="Issues found" sub="Action items registered in this period, and where each one stands today.">
@@ -357,7 +354,9 @@ function Tile({ icon: Icon, tone, label, value, of, progress, change: ch, note, 
 function VisitsPanel({ F, words }) {
   const ch = trend(F.visits, F.visitsBefore, words.prev);
   const purposes = F.reasons.map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }));
-  const total = purposes.reduce((n, p) => n + p.value, 0);
+  // visits by the visitor's unit; named teams listed underneath ("Team not set" left out)
+  const units = F.visitsByUnit.map((r, i) => ({ label: r.unit, value: r.visits, color: r.unit === "No unit" ? "var(--line)" : REASON_COLORS[i % REASON_COLORS.length] }));
+  const teams = F.visitsByUnit.flatMap((r) => r.teams.filter(([t]) => t !== "Team not set").map(([t, n]) => `${t} (${r.unit}) ${n}`));
   return (
     <div className="card s1-tile s1-panel" style={{ "--tone": TONES.visits }}>
       <div className="s1-panel-top">
@@ -389,53 +388,29 @@ function VisitsPanel({ F, words }) {
           </div>
         </div>
       </div>
-      <div className="s1-panel-purpose">
-        <p className="s1-label">Purpose of visit</p>
-        {total === 0 ? <p className="s1-note">No visits in this period.</p> : (
-          <>
-            <div className="s1-bar" role="img" aria-label={purposes.map((p) => `${p.label}: ${p.value}`).join(", ")}>
-              {purposes.map((p) => <span key={p.label} title={`${p.label}: ${p.value}`} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />)}
-            </div>
-            <div className="s1-legend">{purposes.map((p) => <span key={p.label}><i style={{ background: p.color }} />{p.label} <b>{p.value}</b></span>)}</div>
-          </>
-        )}
+      <div className="s1-panel-bottom">
+        <MiniBar label="Purpose of visit" parts={purposes} />
+        <MiniBar label="Visits by unit" parts={units} foot={teams.length ? `Teams: ${teams.join(" · ")}` : null} />
       </div>
     </div>
   );
 }
 
-const TEAM_COLORS = ["var(--success)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--series-5)", "var(--series-1)"];
-
-/** Visits by unit and team: one bar per unit (length = visits), split into its teams. */
-function UnitVisits({ rows }) {
-  const max = Math.max(1, ...rows.map((r) => r.visits));
+/** A labelled bar split into parts, with a one-line legend (used inside the visits panel). */
+function MiniBar({ label, parts, foot }) {
+  const total = parts.reduce((n, p) => n + p.value, 0);
   return (
-    <div className="card s1-tile" style={{ "--tone": TONES.visits }}>
-      <div className="s1-top"><p className="s1-label">Visits by unit and team</p><Users size={17} className="s1-icon" /></div>
-      {rows.length === 0 ? <p className="s1-note">No visits in this period.</p> : (
-        <div className="s1-units">
-          {rows.map((r) => (
-            <div className="s1-unit" key={r.unit}>
-              <div className="s1-unit-head">
-                <span className="s1-dname">{r.unit}</span>
-                <span className="s1-dval"><b>{r.visits}</b> {r.visits === 1 ? "visit" : "visits"} · {plural(r.staff, "staff member")}</span>
-              </div>
-              <div className="s1-dbar s1-unit-bar" style={{ width: `${(r.visits / max) * 100}%` }} role="img"
-                   aria-label={`${r.unit}: ${r.teams.map(([t, n]) => `${t} ${n}`).join(", ")}`}>
-                {r.teams.map(([t, n], i) => (
-                  <span key={t} title={`${t}: ${n}`} style={{ width: `${(n / r.visits) * 100}%`, background: t === "Team not set" ? "var(--line)" : TEAM_COLORS[i % TEAM_COLORS.length] }} />
-                ))}
-              </div>
-              <div className="s1-legend s1-unit-teams">
-                {r.teams.map(([t, n], i) => (
-                  <span key={t}><i style={{ background: t === "Team not set" ? "var(--line)" : TEAM_COLORS[i % TEAM_COLORS.length] }} />{t} <b>{n}</b></span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+    <div className="s1-minibar">
+      <p className="s1-label">{label}</p>
+      {total === 0 ? <p className="s1-note">No visits in this period.</p> : (
+        <>
+          <div className="s1-bar" role="img" aria-label={parts.map((p) => `${p.label}: ${p.value}`).join(", ")}>
+            {parts.map((p) => <span key={p.label} title={`${p.label}: ${p.value}`} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />)}
+          </div>
+          <div className="s1-legend">{parts.map((p) => <span key={p.label}><i style={{ background: p.color }} />{p.label} <b>{p.value}</b></span>)}</div>
+          {foot && <p className="s1-note" style={{ marginTop: 4 }}>{foot}</p>}
+        </>
       )}
-      <p className="s1-note">Visits in this period, grouped by the unit and team of the staff member who made them (set on each employee in the admin console).</p>
     </div>
   );
 }
