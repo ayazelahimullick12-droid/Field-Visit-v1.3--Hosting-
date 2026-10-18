@@ -239,6 +239,11 @@ export function toggleLike(story: any, employeeId: string) {
   delete story.liked;
 }
 
+/** Someone shared the story (the Share button). Counts every share, from when this was added. */
+export function recordShare(story: any) {
+  story.shares = (story.shares || 0) + 1;
+}
+
 export function addComment(story: any, me: { id: string; name: string }, text: string, id: string) {
   const body = String(text || '').trim().slice(0, 600);
   if (!body) throw new Error('Write a comment first');

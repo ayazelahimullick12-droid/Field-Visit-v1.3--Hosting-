@@ -29,6 +29,8 @@ export function allStories(visits) {
 
 export const storyLink = (s) => `${window.location.origin}/staff.html#story=${s.visitId}.${s.id}`;
 export function shareOnWhatsApp(s) {
+  // count the share (for the Management Summary); never hold up opening WhatsApp
+  postAction("story-shared", { visitId: s.visitId, storyId: s.id }).catch(() => {});
   const text = `${s.title || "Field story"}\n${storyLink(s)}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
 }

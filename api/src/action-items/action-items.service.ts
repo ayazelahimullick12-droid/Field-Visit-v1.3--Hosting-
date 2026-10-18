@@ -136,6 +136,10 @@ export class ActionItemsService implements OnModuleInit, OnModuleDestroy {
     return this.onStory(body.visitId, body.storyId, (s) => rules.toggleLike(s, user.id));
   }
 
+  recordShare(body: any) {
+    return this.onStory(body.visitId, body.storyId, (s) => rules.recordShare(s));
+  }
+
   addComment(user: SessionUser, body: any) {
     return this.onStory(body.visitId, body.storyId, (s) => rules.addComment(s, user, body.text, makeId('CM')));
   }

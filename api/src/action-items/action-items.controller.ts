@@ -37,6 +37,9 @@ export class ActionItemsController {
   @StaffOnly() @Post('toggle-story-like') @HttpCode(200)
   like(@CurrentUser() u: SessionUser, @Body() body: any) { return this.items.toggleLike(u, body || {}); }
 
+  @StaffOnly() @Post('story-shared') @HttpCode(200)
+  shared(@Body() body: any) { return this.items.recordShare(body || {}); }
+
   @StaffOnly() @Post('add-story-comment') @HttpCode(200)
   comment(@CurrentUser() u: SessionUser, @Body() body: any) { return this.items.addComment(u, body || {}); }
 }

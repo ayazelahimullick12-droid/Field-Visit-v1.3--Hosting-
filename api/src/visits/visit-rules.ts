@@ -90,7 +90,8 @@ export function anonymised(v: any) {
     } = e;
     // free text may name people: keep only its length (some figures count how complete entries are)
     const blank = (t: any) => (typeof t === 'string' ? '•'.repeat(Math.min(t.length, 200)) : t);
-    return { ...rest, title: blank(rest.title), description: blank(rest.description), note: blank(rest.note) };
+    const commentCount = Array.isArray(comments) ? comments.length : undefined;
+    return { ...rest, commentCount, title: blank(rest.title), description: blank(rest.description), note: blank(rest.note) };
   };
   const { employeeName, stays, ...rest } = v;
   const out: any = { ...rest, employeeName: '' };
