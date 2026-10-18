@@ -63,7 +63,7 @@ const daysText = (d) => (d < 1 ? "less than a day" : d < 1.05 ? "1 day" : `${one
 
 /* ------------------------------------ the numbers ------------------------------------ */
 
-export function figures({ trips, records, offices, settings, f }) {
+export function figures({ trips, records, offices, settings, f, employees = [], departments = [] }) {
   const r = rangeOf(f);
   const loc = f.loc;
   const target = settings?.visitTargetDays || 90;
@@ -91,6 +91,21 @@ export function figures({ trips, records, offices, settings, f }) {
   // --- upcoming: registered for a date after today (not limited by the time filter) ---
   const upcoming = visitsHere.filter((v) => phaseOf(v) === "upcoming");
   const weekAhead = new Date(Date.now() + 7 * DAY_MS);
+
+  // --- who made the visits: by the visitor's unit, then their team inside it ---
+  const empById = new Map(employees.map((e) => [e.id, e]));
+  const byUnit = new Map();
+  visits.forEach((v) => {
+    const e = empById.get(v.employeeId) || {};
+    const unit = departments.find((d) => d.id === e.departmentId);
+    const unitName = unit?.name || "No unit";
+    const teamName = (unit?.units || []).find((t) => t.id === e.teamId)?.name || "Team not set";
+    const row = byUnit.get(unitName) || { unit: unitName, visits: 0, staff: new Set(), teams: new Map() };
+    row.visits++;
+    row.staff.add(v.employeeId);
+    row.teams.set(teamName, (row.teams.get(teamName) || 0) + 1);
+    byUnit.set(unitName, row);
+  });
 
   // --- why, and when in the day ---
   const reasons = countBy(visits, (v) => reasonText(v) || "Not given");
@@ -139,6 +154,12 @@ export function figures({ trips, records, offices, settings, f }) {
     branches: branches.length, visitedInPeriod,
     upcoming: upcoming.length,
     upcomingThisWeek: upcoming.filter((v) => new Date(`${v.date}T00:00`) <= weekAhead).length,
+    // real units first (most visits first), "No unit" last
+    visitsByUnit: [...byUnit.values()].sort((a, b) => (a.unit === "No unit") - (b.unit === "No unit") || b.visits - a.visits).map((r) => ({
+      unit: r.unit, visits: r.visits, staff: r.staff.size,
+      // named teams first (largest first), "Team not set" last
+      teams: [...r.teams.entries()].sort((a, b) => (a[0] === "Team not set") - (b[0] === "Team not set") || b[1] - a[1]),
+    })),
     upcomingOffices: new Set(upcoming.flatMap((v) => (v.stops || []).map((x) => x.name))).size,
     reasons: [...shownReasons, ...(otherReasons ? [["Other purposes", otherReasons]] : [])],
 
@@ -178,9 +199,9 @@ export function figures({ trips, records, offices, settings, f }) {
 // Each section has its own colour (the icon chip, the tile icons and the progress bars).
 const TONES = { visits: "var(--success)", issues: "var(--danger)", clients: "var(--warning)", stories: "var(--brand)" };
 
-export default function Summary({ trips, records, offices = [], settings, period = "30d", publicView = false }) {
+export default function Summary({ trips, records, offices = [], employees = [], departments = [], settings, period = "30d", publicView = false }) {
   const [f, setF] = useState({ ...DEFAULT_FILTERS, period });
-  const F = useMemo(() => figures({ trips, records, offices, settings, f }), [trips, records, offices, settings, f]);
+  const F = useMemo(() => figures({ trips, records, offices, settings, f, employees, departments }), [trips, records, offices, settings, f, employees, departments]);
   const words = periodWords(f);
   const filtered = f.period !== DEFAULT_FILTERS.period || Object.values(f.loc).some((v) => v !== "All");
 
@@ -218,6 +239,9 @@ export default function Summary({ trips, records, offices = [], settings, period
 
       <Section icon={Route} tone={TONES.visits} title="Field visits">
         <VisitsPanel F={F} words={words} />
+        <div className="s1-grid s1-wide">
+          <UnitVisits rows={F.visitsByUnit} />
+        </div>
       </Section>
 
       <Section icon={Wrench} tone={TONES.issues} title="Issues found" sub="Action items registered in this period, and where each one stands today.">
@@ -376,6 +400,42 @@ function VisitsPanel({ F, words }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+const TEAM_COLORS = ["var(--success)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--series-5)", "var(--series-1)"];
+
+/** Visits by unit and team: one bar per unit (length = visits), split into its teams. */
+function UnitVisits({ rows }) {
+  const max = Math.max(1, ...rows.map((r) => r.visits));
+  return (
+    <div className="card s1-tile" style={{ "--tone": TONES.visits }}>
+      <div className="s1-top"><p className="s1-label">Visits by unit and team</p><Users size={17} className="s1-icon" /></div>
+      {rows.length === 0 ? <p className="s1-note">No visits in this period.</p> : (
+        <div className="s1-units">
+          {rows.map((r) => (
+            <div className="s1-unit" key={r.unit}>
+              <div className="s1-unit-head">
+                <span className="s1-dname">{r.unit}</span>
+                <span className="s1-dval"><b>{r.visits}</b> {r.visits === 1 ? "visit" : "visits"} · {plural(r.staff, "staff member")}</span>
+              </div>
+              <div className="s1-dbar s1-unit-bar" style={{ width: `${(r.visits / max) * 100}%` }} role="img"
+                   aria-label={`${r.unit}: ${r.teams.map(([t, n]) => `${t} ${n}`).join(", ")}`}>
+                {r.teams.map(([t, n], i) => (
+                  <span key={t} title={`${t}: ${n}`} style={{ width: `${(n / r.visits) * 100}%`, background: t === "Team not set" ? "var(--line)" : TEAM_COLORS[i % TEAM_COLORS.length] }} />
+                ))}
+              </div>
+              <div className="s1-legend s1-unit-teams">
+                {r.teams.map(([t, n], i) => (
+                  <span key={t}><i style={{ background: t === "Team not set" ? "var(--line)" : TEAM_COLORS[i % TEAM_COLORS.length] }} />{t} <b>{n}</b></span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="s1-note">Visits in this period, grouped by the unit and team of the staff member who made them (set on each employee in the admin console).</p>
     </div>
   );
 }

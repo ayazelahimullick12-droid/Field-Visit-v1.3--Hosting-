@@ -10,6 +10,7 @@ export function employeeJson(e: Employee) {
     pin: e.pin,
     roles: e.roles,
     departmentId: e.departmentId,
+    teamId: e.teamId,
     supervisorId: e.supervisorId,
     designation: e.designation,
     department: e.department,

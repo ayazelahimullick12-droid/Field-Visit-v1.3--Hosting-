@@ -62,12 +62,16 @@ export class PeopleController {
     }
     const roles = (Array.isArray(body?.roles) ? body.roles : ['field']).filter((r: string) => ROLES.includes(r));
     const departmentId = clean(body?.departmentId);
+    // a team only counts if it belongs to the chosen unit
+    const teamId = clean(body?.teamId);
+    const team = teamId && departmentId ? await this.prisma.unit.findFirst({ where: { id: teamId, departmentId } }) : null;
     if (roles.includes('fixer') && !departmentId) throw new UserError('A fixer needs a unit, so their queue knows which action items are theirs.');
 
     const data: any = {
       name, pin, email, roles,
       phone: clean(body?.phone),
       departmentId,
+      teamId: team ? team.id : null,
       supervisorId: clean(body?.supervisorId),
       designation: clean(body?.designation),
       department: clean(body?.department),

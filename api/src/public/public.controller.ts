@@ -17,11 +17,12 @@ export class PublicController {
   @Public()
   @Get('summary')
   async summary() {
-    const [visits, offices, employees, setting] = await Promise.all([
+    const [visits, offices, employees, setting, units] = await Promise.all([
       this.visits.all(),
       this.prisma.office.findMany({ where: { type: 'branch' } }),
-      this.prisma.employee.findMany({ select: { id: true, roles: true, department: true } }),
+      this.prisma.employee.findMany({ select: { id: true, roles: true, department: true, departmentId: true, teamId: true } }),
       this.prisma.setting.findUnique({ where: { key: 'app' } }),
+      this.prisma.department.findMany({ include: { units: true }, orderBy: { sortOrder: 'asc' } }),
     ]);
     // the charts reach back 12 months at most
     const since = new Date();
@@ -31,6 +32,8 @@ export class PublicController {
       visits: visits.filter((v) => !v.date || v.date >= from).map(anonymised),
       offices: offices.map(branchJson),
       employees,
+      // unit and team names, for "Visits by unit and team"
+      departments: units.map((d) => ({ id: d.id, name: d.name, units: d.units.map((u) => ({ id: u.id, name: u.name })) })),
       settings: { ...DEFAULT_APP_SETTINGS, ...((setting?.value as object) || {}) },
     };
   }

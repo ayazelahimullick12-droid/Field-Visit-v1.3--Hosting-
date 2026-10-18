@@ -18,10 +18,11 @@ export default function App() {
   useEffect(() => {
     // /api/public/summary has no names, contact details, photos or text (see api/src/public)
     fetch("/api/public/summary").then((r) => { if (!r.ok) throw new Error("summary"); return r.json(); })
-      .then(({ visits, offices, employees, settings }) => setData({
+      .then(({ visits, offices, employees, departments, settings }) => setData({
         visits, offices,
         // only what the counts need: never keep anyone's details in the page
-        employees: employees.map((e) => ({ id: e.id, roles: e.roles || [] })),
+        employees: employees.map((e) => ({ id: e.id, roles: e.roles || [], departmentId: e.departmentId, teamId: e.teamId })),
+        departments: departments || [],
         settings: settings && !Array.isArray(settings) ? settings : DEFAULT_SETTINGS,
         at: new Date(),
       }))
@@ -52,7 +53,7 @@ export default function App() {
           </div>
           {error ? <div className="card card-pad empty-note">The summary couldn't be loaded. Try again in a moment.</div>
             : !data ? <div className="card card-pad empty-note">Loading…</div>
-            : <Summary trips={data.visits} records={records} coverage={coverage} offices={data.offices} employees={data.employees} settings={data.settings} period="30d" publicView />}
+            : <Summary trips={data.visits} records={records} coverage={coverage} offices={data.offices} employees={data.employees} departments={data.departments} settings={data.settings} period="30d" publicView />}
         </div>
       </main>
     </div>

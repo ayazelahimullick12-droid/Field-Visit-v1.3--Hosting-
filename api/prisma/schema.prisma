@@ -24,7 +24,8 @@ model Employee {
   pin          String   @unique
   passwordHash String
   roles        String[] // "field" | "fixer" | "management"
-  departmentId String?  // the unit (Department) a fixer belongs to
+  departmentId String?  // the person's unit (Department), e.g. Software; a fixer's queue is this unit's
+  teamId       String?  // their team (a Unit row) inside that unit, e.g. IT Support; optional
   supervisorId String?
   designation  String?
   department   String?  // the staff department (Microfinance, HR, ...), used by the Summary filter

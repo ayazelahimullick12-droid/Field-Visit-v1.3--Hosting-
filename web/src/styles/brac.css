@@ -1460,3 +1460,9 @@ button.story-photo{ border:0; padding:0; cursor:pointer; font:inherit; color:inh
 .s1-panel-purpose .s1-bar{ margin-top:8px; }
 @media (max-width:760px){ .s1-panel-top{ grid-template-columns:1fr; } }
 @media (max-width:420px){ .s1-panel-side{ grid-template-columns:1fr; } .s1-big{ font-size:38px; } }
+
+/* Visits by unit and team */
+.s1-units{ display:flex; flex-direction:column; gap:12px; margin-top:8px; }
+.s1-unit-head{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:5px; }
+.s1-unit-bar{ height:14px; }
+.s1-unit-teams{ margin-top:5px; font-size:12px; }

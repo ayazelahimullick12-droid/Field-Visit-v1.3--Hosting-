@@ -769,7 +769,7 @@ function UnitsEditor({ dept, counts, setDepartments, showToast }) {
 const ROLE_OPTIONS = ["field", "fixer", "management"];
 const ROLE_LABELS = { field: "Base user", fixer: "Fixer", management: "Management", supervisor: "Management" };
 const roleLabel = (r) => ROLE_LABELS[r] || r;
-const emptyEmployeeForm = () => ({ name: "", phone: "", email: "", password: "", pin: "", departmentId: "", supervisorId: "", roles: ["field"], designation: "", department: "" });
+const emptyEmployeeForm = () => ({ name: "", phone: "", email: "", password: "", pin: "", departmentId: "", teamId: "", supervisorId: "", roles: ["field"], designation: "", department: "" });
 
 function EmployeesTab({ employees, reloadEmployees, departments, showToast, currentAdmin }) {
   const [form, setForm] = useState(emptyEmployeeForm());
@@ -814,7 +814,7 @@ function EmployeesTab({ employees, reloadEmployees, departments, showToast, curr
     setFormOpen(true);
     setForm({
       name: e.name || "", phone: e.phone || "", email: e.email || "", password: "",
-      pin: e.pin || "", departmentId: e.departmentId || "", supervisorId: e.supervisorId || "", roles: e.roles || [],
+      pin: e.pin || "", departmentId: e.departmentId || "", teamId: e.teamId || "", supervisorId: e.supervisorId || "", roles: e.roles || [],
       designation: e.designation || "", department: e.department || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -868,10 +868,17 @@ function EmployeesTab({ employees, reloadEmployees, departments, showToast, curr
             </div>
             <div className="field-group">
               <label className="field-label">{TERMS.unit}</label>
-              <select className="select" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
+              <select className="select" value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value, teamId: "" })}>
                 <option value="">—</option>
                 {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
+              {/* their team inside the unit (optional): used for "Visits by unit and team" on the Summary */}
+              {form.departmentId && (
+                <select className="select" style={{ marginTop: 8 }} aria-label={TERMS.team} value={form.teamId} onChange={(e) => setForm({ ...form, teamId: e.target.value })}>
+                  <option value="">{TERMS.team}: not set</option>
+                  {(departments.find((d) => d.id === form.departmentId)?.units || []).map((u) => <option key={u.id} value={u.id}>{TERMS.team}: {u.name}</option>)}
+                </select>
+              )}
             </div>
           </div>
           <div className="field-row">
@@ -940,7 +947,7 @@ function EmployeesTab({ employees, reloadEmployees, departments, showToast, curr
                 <tr key={e.id}>
                   <td data-label="Name"><div className="cell-main">{e.name}</div>{e.phone && <div className="cell-sub">{e.phone}</div>}</td>
                   <td data-label="User type"><div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "inherit" }}>{((e.roles || []).length ? [...new Set(e.roles.map(roleLabel))] : [roleLabel("field")]).map((r) => <span key={r} className="role-badge">{r}</span>)}</div></td>
-                  <td data-label={TERMS.unit}>{dept?.name || "—"}</td>
+                  <td data-label={TERMS.unit}>{dept?.name || "—"}{dept && e.teamId && <div className="cell-sub">{(dept.units || []).find((u) => u.id === e.teamId)?.name}</div>}</td>
                   <td data-label="Supervisor">{sup?.name || "—"}</td>
                   <td data-label="Email" className="mono" style={{ fontSize: 12 }}>{e.email || "—"}</td>
                   <td data-label="" style={{ textAlign: "right" }}>
