@@ -1365,3 +1365,32 @@ button.story-photo{ border:0; padding:0; cursor:pointer; font:inherit; color:inh
 .switch:checked{ background:var(--success); }
 .switch:checked::after{ transform:translateX(18px); }
 .switch:focus-visible{ outline:3px solid var(--brand-wash-2); outline-offset:2px; }
+
+/* ---------- Management → Summary one-pager (src/staff/management/Summary.jsx) ---------- */
+.s1-filters{ display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:14px; }
+.s1-filters .mf-field{ min-width:150px; }
+.s1-lead{ margin-bottom:22px; }
+.s1-lead p{ margin:0; font-size:15px; line-height:1.6; color:var(--ink); }
+.s1-lead p.s1-when{ font-size:12.5px; color:var(--ink-faint); margin-bottom:6px; }
+.s1-lead b{ font-weight:750; }
+.s1-section{ margin-bottom:26px; }
+.s1-h{ display:flex; align-items:center; gap:8px; font-size:16px; font-weight:750; margin:0 0 4px; color:var(--ink); }
+.s1-sub{ font-size:12.5px; color:var(--ink-faint); margin:0 0 10px; }
+.s1-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-top:10px; }
+.s1-grid.s1-wide{ grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); }
+.s1-tile{ padding:14px 16px; min-width:0; }
+.s1-label{ font-size:12.5px; font-weight:700; color:var(--ink-soft); margin:0 0 4px; }
+.s1-num{ font-size:28px; font-weight:800; line-height:1.15; margin:0; color:var(--ink); letter-spacing:-.02em; }
+.s1-of{ font-size:14px; font-weight:500; color:var(--ink-faint); letter-spacing:0; }
+.s1-note{ font-size:12.5px; color:var(--ink-faint); line-height:1.5; margin:6px 0 0; }
+.s1-stars{ display:flex; gap:2px; color:var(--warning); margin-top:4px; }
+.s1-bar{ display:flex; height:12px; border-radius:6px; overflow:hidden; margin:10px 0 8px; background:var(--line-soft); }
+.s1-bar span{ display:block; height:100%; }
+.s1-legend{ display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12.5px; color:var(--ink-soft); }
+.s1-legend i{ display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:0; }
+.s1-legend b{ font-weight:750; color:var(--ink); }
+.s1-row{ display:flex; justify-content:space-between; gap:12px; font-size:13px; padding:7px 0; border-top:1px solid var(--line-soft); }
+.s1-row span:first-child{ min-width:0; overflow-wrap:anywhere; }
+.s1-row span:last-child{ white-space:nowrap; color:var(--ink-soft); }
+.s1-row b{ color:var(--ink); font-weight:750; }
+@media (max-width:560px){ .s1-row span:last-child{ white-space:normal; text-align:right; } .s1-num{ font-size:24px; } }
