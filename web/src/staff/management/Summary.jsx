@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from "react";
 import {
-  Route, Wrench, Star, Eye, RotateCcw, MapPin, MapPinOff, Building2, CalendarDays, ClipboardList, CheckCircle2, AlarmClock,
+  Route, Wrench, Star, Eye, RotateCcw, MapPin, CalendarClock, Building2, CalendarDays, ClipboardList, CheckCircle2, AlarmClock,
   Smile, Users, UserCheck, Image as ImageIcon, Heart, MessageCircle, Share2, ArrowUpRight, ArrowDownRight, Minus,
 } from "lucide-react";
 import { LocationFilterBar, EMPTY_LOCATION_FILTER, matchesLocation } from "../analytics/common";
 import { computeCoverage, average, DAY_MS } from "../../lib/offices";
-import { submittedComplaints, entriesOf, entryPlaces, isDraft, plural, reasonText } from "../../lib/visits";
+import { submittedComplaints, entriesOf, entryPlaces, isDraft, plural, reasonText, phaseOf } from "../../lib/visits";
 import { statusOf, isFixed, isLate, isAssigned } from "../../lib/complaints";
 import { PERIODS, periodRange } from "./periods";
 import { daysToResolve } from "./data";
@@ -89,10 +89,13 @@ export function figures({ trips, records, offices, settings, f }) {
   const recordsHere = records.filter((x) => x.date && matchesLocation(x, loc));
   const recordsNow = recordsHere.filter((x) => inRange(x.date, r.from, r.to));
 
-  // --- branches: visited in the period, and not visited within the visit target (any time) ---
+  // --- branches visited in the period ---
   const branches = offices.filter((o) => o.active !== false && matchesLocation({ division: o.division, region: o.district, area: o.area, location: o.name }, loc));
   const visitedInPeriod = computeCoverage(branches, recordsNow, target).filter((b) => b.visitCount > 0).length;
-  const notVisitedLately = computeCoverage(branches, recordsHere, target).filter((b) => b.status !== "ok").length;
+
+  // --- upcoming: registered for a date after today (not limited by the time filter) ---
+  const upcoming = visitsHere.filter((v) => phaseOf(v) === "upcoming");
+  const weekAhead = new Date(Date.now() + 7 * DAY_MS);
 
   // --- how long visits last (visit date to return date, both days counted) ---
   const lengths = visits.filter((v) => v.returnDate && v.returnDate >= v.date)
@@ -142,7 +145,10 @@ export function figures({ trips, records, offices, settings, f }) {
     visits: visits.length, visitsBefore,
     staff: new Set(visits.map((v) => v.employeeId)).size,
     officesReached: new Set(recordsNow.map((x) => x.location)).size,
-    branches: branches.length, visitedInPeriod, notVisitedLately,
+    branches: branches.length, visitedInPeriod,
+    upcoming: upcoming.length,
+    upcomingThisWeek: upcoming.filter((v) => new Date(`${v.date}T00:00`) <= weekAhead).length,
+    upcomingOffices: new Set(upcoming.flatMap((v) => (v.stops || []).map((x) => x.name))).size,
     typicalDays: median(lengths), longestDays: lengths.length ? Math.max(...lengths) : null,
     reasons: [...shownReasons, ...(otherReasons ? [["Other purposes", otherReasons]] : [])],
 
@@ -228,9 +234,8 @@ export default function Summary({ trips, records, offices = [], settings, period
           <Tile icon={Building2} tone={TONES.visits} label="Branches visited" value={F.visitedInPeriod} of={`of ${F.branches}`}
                 progress={F.branches ? F.visitedInPeriod / F.branches : null}
                 note={`${pct(F.visitedInPeriod, F.branches)}% of branches had at least one visit in this period.`} />
-          <Tile icon={MapPinOff} tone="var(--danger)" label={`Branches unreached for ${F.target}+ days`} value={F.notVisitedLately} of={`of ${F.branches}`}
-                progress={F.branches ? F.notVisitedLately / F.branches : null}
-                note={`BRAC aims to visit every branch at least once every ${F.target} days. Counted as of today.`} />
+          <Tile icon={CalendarClock} tone={TONES.visits} label="Upcoming visits" value={F.upcoming} of={F.upcoming ? "planned" : ""}
+                note={F.upcoming ? `Visits staff have registered for a date after today${F.upcomingOffices ? `, to ${plural(F.upcomingOffices, "office")}` : ""}. ${F.upcomingThisWeek} of them ${F.upcomingThisWeek === 1 ? "is" : "are"} in the next 7 days.` : "No visits are registered for a date after today."} />
           <Tile icon={CalendarDays} tone={TONES.visits} label="Typical visit length" value={F.typicalDays == null ? "—" : one(F.typicalDays)} of={F.typicalDays == null ? "" : F.typicalDays === 1 ? "day" : "days"}
                 note={F.typicalDays == null ? "No visits with both dates in this period." : `Half of the visits took this long or less. The longest took ${plural(F.longestDays, "day")}.`} />
         </div>
