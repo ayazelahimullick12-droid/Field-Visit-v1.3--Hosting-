@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from "react";
 import {
-  Route, Wrench, Star, Eye, RotateCcw, MapPin, CalendarClock, Building2, ClipboardList, CheckCircle2, AlarmClock,
+  Route, Wrench, Star, Eye, RotateCcw, MapPin, CalendarClock, Building2, ClipboardList, CheckCircle2, CircleDot,
   Smile, Users, UserCheck, Image as ImageIcon, Heart, MessageCircle, Share2, ArrowUpRight, ArrowDownRight, Minus,
 } from "lucide-react";
 import { LocationFilterBar, EMPTY_LOCATION_FILTER, matchesLocation } from "../analytics/common";
 import { computeCoverage, average, DAY_MS } from "../../lib/offices";
 import { submittedComplaints, entriesOf, entryPlaces, isDraft, plural, reasonText, phaseOf } from "../../lib/visits";
-import { statusOf, isFixed, isLate, isAssigned } from "../../lib/complaints";
+import { statusOf, isFixed, isAssigned } from "../../lib/complaints";
 import { PERIODS, periodRange } from "./periods";
 import { daysToResolve } from "./data";
 
@@ -17,7 +17,8 @@ import { daysToResolve } from "./data";
    How it's built:
      figures()   works out every number from the visits, offices and settings (no drawing here)
      Summary     the page: filters, an opening sentence, then four sections of tiles
-     Tile, SplitBar, UrgencyStatus, DepartmentChart, Rows   the kinds of tile
+     VisitsPanel, IssuesPanel   one card each for Field visits and Issues found
+     Tile, MiniBar, Rows         the other kinds of tile
    To add a tile: add the number in figures(), then a <Tile …/> in the section you want. */
 
 // On screen, statuses use everyday words (the stored values stay the same).
@@ -28,7 +29,6 @@ const STATUS_WORDS = [
   ["Long Term", "Long-term work", "var(--magenta)"],
   ["Fixed", "Fixed", "var(--success)"],
 ];
-const URGENCIES = ["High", "Medium", "Low"];
 const REASON_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--series-5)"];
 
 const DEFAULT_FILTERS = { period: "30d", from: "", to: "", loc: EMPTY_LOCATION_FILTER };
@@ -166,11 +166,8 @@ export function figures({ trips, records, offices, settings, f, employees = [], 
     raised: raised.length, raisedBefore, fixed: fixed.length, open: open.length,
     daysToFix: daysToFix(fixed),
     waiting: raised.filter((c) => statusOf(c) === "Waiting").length,
-    late: raised.filter((c) => isLate(c)).length,
+    highOpen: open.filter((c) => c.urgency === "High").length,
     byStatus: STATUS_WORDS.map(([key, label, color]) => ({ label, color, value: raised.filter((c) => statusOf(c) === key).length })),
-    byUrgency: URGENCIES.map((u) => ({
-      u, raised: raised.filter((c) => c.urgency === u).length, open: open.filter((c) => c.urgency === u).length, fixed: fixed.filter((c) => c.urgency === u).length,
-    })),
     units,
 
     talks: talks.length,
@@ -242,26 +239,7 @@ export default function Summary({ trips, records, offices = [], employees = [], 
       </Section>
 
       <Section icon={Wrench} tone={TONES.issues} title="Issues found" sub="Action items registered in this period, and where each one stands today.">
-        <div className="s1-grid">
-          <Tile icon={ClipboardList} tone={TONES.issues} label="Registered action items" value={F.raised}
-                change={trend(F.raised, F.raisedBefore, words.prev, true)}
-                note="Issues found at offices during visits that a department needs to fix." />
-          <Tile icon={CheckCircle2} tone="var(--success)" label="Fixed" value={F.fixed} of={`of ${F.raised}`}
-                progress={F.raised ? F.fixed / F.raised : null}
-                note={F.raised ? `${pct(F.fixed, F.raised)}% are fixed.${F.daysToFix != null ? ` On average a fix took ${daysText(F.daysToFix)}.` : ""}` : "Nothing was registered in this period."} />
-          <Tile icon={AlarmClock} tone="var(--danger)" label="Past their deadline" value={F.late} of={`of ${F.open} still open`}
-                progress={F.open ? F.late / F.open : null}
-                note="Given to a department, not fixed yet, and the deadline has passed." />
-        </div>
-        <div className="s1-grid s1-wide">
-          <SplitBar label="Where every action item stands" note="Each action item registered in this period, by its status today." parts={F.byStatus} />
-          <UrgencyStatus rows={F.byUrgency} />
-        </div>
-        {!publicView && (
-          <div className="s1-grid s1-wide">
-            <DepartmentChart rows={F.units} />
-          </div>
-        )}
+        <IssuesPanel F={F} words={words} publicView={publicView} />
       </Section>
 
       <Section icon={Star} tone={TONES.clients} title="Client feedback" sub="From client interactions: staff ask members to rate BRAC from 1 to 5 stars on the admin's questions.">
@@ -415,84 +393,50 @@ function MiniBar({ label, parts, foot }) {
   );
 }
 
-/** One bar split into parts, with a legend giving each part's count. */
-function SplitBar({ label, note, parts }) {
-  const total = parts.reduce((s, p) => s + p.value, 0);
-  return (
-    <div className="card s1-tile">
-      <p className="s1-label">{label}</p>
-      {total === 0 ? <p className="s1-note">Nothing recorded in this period.</p> : (
-        <>
-          <div className="s1-bar" role="img" aria-label={parts.map((p) => `${p.label}: ${p.value}`).join(", ")}>
-            {parts.filter((p) => p.value).map((p) => <span key={p.label} title={`${p.label}: ${p.value}`} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />)}
-          </div>
-          <div className="s1-legend">
-            {parts.filter((p) => p.value).map((p) => <span key={p.label}><i style={{ background: p.color }} />{p.label} <b>{p.value}</b></span>)}
-          </div>
-        </>
-      )}
-      {note && <p className="s1-note">{note}</p>}
-    </div>
-  );
-}
+// shades of the Issues colour, one per department (largest first)
+const DEPT_SHADES = [85, 65, 48, 34, 24, 16].map((n) => `color-mix(in srgb, var(--danger) ${n}%, transparent)`);
 
-const URGENCY_LOOK = { High: "danger", Medium: "warning", Low: "neutral" };
-
-/** Items status: for each urgency, how many are fixed and how many are still open. */
-function UrgencyStatus({ rows }) {
-  const any = rows.some((r) => r.raised);
+/**
+ * Issues found in one card, shaped like the visits panel: registered action items (with the change
+ * from the period before) on the left, Fixed and Still open on the right, and where they stand and
+ * which departments they went to along the bottom. The department bar is left off the public page.
+ */
+function IssuesPanel({ F, words, publicView }) {
+  const ch = trend(F.raised, F.raisedBefore, words.prev, true);
+  const statuses = F.byStatus.filter((x) => x.value);
+  const depts = F.units.map((u, i) => ({ label: u.unit, value: u.given, color: DEPT_SHADES[i % DEPT_SHADES.length] }));
   return (
-    <div className="card s1-tile">
-      <p className="s1-label">Items status</p>
-      {!any ? <p className="s1-note">Nothing was registered in this period.</p> : (
-        <>
-          {rows.map((r) => (
-            <div className="s1-urow" key={r.u}>
-              <span className={`s1-pill ${URGENCY_LOOK[r.u]}`}>{r.u}</span>
-              <div className="s1-track" role="img" aria-label={`${r.u} urgency: ${r.fixed} fixed, ${r.open} open`}>
-                {r.raised > 0 && <><span className="fixed" style={{ width: `${(r.fixed / r.raised) * 100}%` }} /><span className={`open ${URGENCY_LOOK[r.u]}`} style={{ width: `${(r.open / r.raised) * 100}%` }} /></>}
-              </div>
-              <span className="s1-uval">{r.raised ? <><b>{r.open}</b> open of {r.raised}</> : "none"}</span>
-            </div>
-          ))}
-          <div className="s1-legend" style={{ marginTop: 8 }}>
-            <span><i style={{ background: "var(--success)" }} />Fixed</span><span><i style={{ background: "var(--line)" }} />Still open (coloured by urgency)</span>
+    <div className="card s1-tile s1-panel" style={{ "--tone": TONES.issues }}>
+      <div className="s1-panel-top">
+        <div className="s1-panel-main">
+          <div className="s1-top"><p className="s1-label">Registered action items · {words.now.toLowerCase()}</p><ClipboardList size={17} className="s1-icon" /></div>
+          <p className="s1-num s1-big">{F.raised}</p>
+          {ch && (
+            <span className={`s1-trend ${ch.mood}`}>
+              {ch.mood === "flat" ? <Minus size={12} /> : ch.up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />} {ch.text}
+            </span>
+          )}
+          <p className="s1-note">Issues found at offices during visits that a department needs to fix. Their status is as of today.</p>
+        </div>
+        <div className="s1-panel-side">
+          <div className="s1-mini" style={{ "--tone": "var(--success)" }}>
+            <div className="s1-top"><span className="s1-label">Fixed</span><CheckCircle2 size={15} className="s1-icon" /></div>
+            <p className="s1-num">{F.fixed}<span className="s1-of"> of {F.raised}</span></p>
+            <div className="s1-progress"><span style={{ width: `${pct(F.fixed, F.raised)}%` }} /></div>
+            <p className="s1-note">{F.raised ? `${pct(F.fixed, F.raised)}%${F.daysToFix != null ? ` · ${daysText(F.daysToFix)} on average` : ""}` : "Nothing registered in this period."}</p>
           </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-/** Action items per department: bar length = items given; green part = fixed; plus average time to fix. */
-function DepartmentChart({ rows }) {
-  const max = Math.max(1, ...rows.map((r) => r.given));
-  return (
-    <div className="card s1-tile">
-      <p className="s1-label">Action items per department</p>
-      {rows.length === 0 ? <p className="s1-note">No action item has been given to a department yet.</p> : (
-        <>
-          <div className="s1-dept">
-            {rows.map((r) => (
-              <div className="s1-drow" key={r.unit}>
-                <span className="s1-dname">{r.unit}</span>
-                <div className="s1-dtrack">
-                  <div className="s1-dbar" style={{ width: `${(r.given / max) * 100}%` }} role="img" aria-label={`${r.unit}: ${r.fixed} of ${r.given} fixed`}>
-                    <span className="fixed" style={{ width: `${(r.fixed / r.given) * 100}%` }} />
-                    <span className="open" style={{ width: `${((r.given - r.fixed) / r.given) * 100}%` }} />
-                  </div>
-                </div>
-                <span className="s1-dval"><b>{r.fixed}</b> of {r.given} fixed{r.days != null ? ` · ${daysText(r.days)}` : ""}</span>
-              </div>
-            ))}
+          <div className="s1-mini">
+            <div className="s1-top"><span className="s1-label">Still open</span><CircleDot size={15} className="s1-icon" /></div>
+            <p className="s1-num">{F.open}<span className="s1-of"> of {F.raised}</span></p>
+            <div className="s1-progress"><span style={{ width: `${pct(F.open, F.raised)}%` }} /></div>
+            <p className="s1-note">{F.open ? `${F.highOpen} of them ${F.highOpen === 1 ? "is" : "are"} high urgency.` : "Everything registered is fixed."}</p>
           </div>
-          <div className="s1-legend" style={{ marginTop: 10 }}>
-            <span><i style={{ background: "var(--success)" }} />Fixed</span>
-            <span><i style={{ background: "var(--info)" }} />Not fixed yet</span>
-            <span>Bar length = action items given · time = average to fix</span>
-          </div>
-        </>
-      )}
+        </div>
+      </div>
+      <div className="s1-panel-bottom">
+        <MiniBar label="Where they stand" parts={statuses} />
+        {!publicView && <MiniBar label="By department" parts={depts} foot={F.waiting ? `${F.waiting} not given to a department yet.` : null} />}
+      </div>
     </div>
   );
 }
