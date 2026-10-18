@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
   Route, Wrench, Eye, RotateCcw, MapPin, CalendarClock, Building2, ClipboardList, CheckCircle2, CircleDot,
-  Users, Image as ImageIcon, ArrowUpRight, ArrowDownRight, Minus,
+  Users, Image as ImageIcon, Heart, MessageCircle, Share2, ArrowUpRight, ArrowDownRight, Minus,
 } from "lucide-react";
 import { LocationFilterBar, EMPTY_LOCATION_FILTER, matchesLocation } from "../analytics/common";
 import { computeCoverage, average, DAY_MS } from "../../lib/offices";
@@ -374,9 +374,9 @@ function ObservationsPanel({ F, words }) {
     { label: "Noticed by the visitor", value: F.observations - F.referred, color: "color-mix(in srgb, var(--brand) 35%, transparent)" },
   ];
   const reactions = [
-    { label: "Likes", value: F.likes, color: "var(--brand)" },
-    { label: "Comments", value: F.comments, color: "var(--series-2)" },
-    { label: "Shares", value: F.shares, color: "var(--series-3)" },
+    { label: F.likes === 1 ? "Like" : "Likes", value: F.likes, Icon: Heart },
+    { label: F.comments === 1 ? "Comment" : "Comments", value: F.comments, Icon: MessageCircle },
+    { label: F.shares === 1 ? "Share" : "Shares", value: F.shares, Icon: Share2 },
   ];
   return (
     <div className="card s1-tile s1-panel" style={{ "--tone": TONES.stories }}>
@@ -406,8 +406,14 @@ function ObservationsPanel({ F, words }) {
       </div>
       <div className="s1-panel-bottom">
         <MiniBar label="Who pointed the observations out" parts={who} />
-        <MiniBar label="How staff responded to stories" parts={reactions}
-                 foot="Shares are counted when someone uses the Share button." />
+        <div className="s1-minibar">
+          <p className="s1-label">How staff responded to stories</p>
+          <div className="s1-reacts">
+            {reactions.map(({ label, value, Icon }) => (
+              <span key={label} title={label}><Icon size={18} aria-hidden="true" /><b>{value}</b><em>{label}</em></span>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
