@@ -6,3 +6,4 @@ api/.local-pg/
 web/.next/
 web/out/
 *.log
+api/backups/
