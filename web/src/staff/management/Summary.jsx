@@ -16,7 +16,7 @@ import { daysToResolve } from "./data";
 
    How it's built:
      figures()   works out every number from the visits, offices and settings (no drawing here)
-     Summary     the page: filters, an opening sentence, then four sections of tiles
+     Summary     the page: filters, then one panel per section
      VisitsPanel, IssuesPanel, ObservationsPanel   one card per section
      MiniBar                     a labelled bar with its legend, used inside the cards
    To add a figure: work it out in figures(), then show it in the section's panel. */
@@ -205,16 +205,6 @@ export default function Summary({ trips, records, offices = [], employees = [], 
           {filtered && <button className="mf-clear" onClick={() => setF({ ...DEFAULT_FILTERS, period })}><RotateCcw size={12} /> Reset</button>}
         </div>
       )}
-
-      <div className="card card-pad s1-lead">
-        <p className="s1-when">{words.now}{Object.values(f.loc).some((v) => v !== "All") ? ` · ${[f.loc.division, f.loc.region, f.loc.area, f.loc.branch].filter((v) => v !== "All").join(" › ")}` : " · all of Bangladesh"}</p>
-        <p>
-          {plural(F.staff, "staff member")} made <b>{plural(F.visits, "visit")}</b> to {plural(F.officesReached, "office")}.
-          They registered <b>{plural(F.raised, "action item")}</b> ({F.fixed} already resolved)
-          {F.talks ? <>, reached <b>{plural(F.talks, "client")}</b></> : ""}
-          {F.stories ? <>, and shared <b>{plural(F.stories, "story", "stories")}</b></> : ""}.
-        </p>
-      </div>
 
       <Section icon={Route} tone={TONES.visits} title="Field visits">
         <VisitsPanel F={F} words={words} />
