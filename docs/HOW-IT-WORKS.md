@@ -52,7 +52,7 @@ They talk like this:
 | Action item | `complaint` (e.g. `visit.complaints`, `ComplaintPage.jsx`) |
 | Unit (e.g. HR, Software) | `department` / `Department` table / `departmentId` |
 | Team (inside a unit) | `unit` / `Unit` table |
-| Region (of a branch) | `region` in the database; **`district`** in the website's office objects (old name, kept so the analytics code still works) |
+| Region (of a branch) | `region` in the database; **`district`** in the website's office objects (old name, kept so the map and analytics still work) |
 | Purpose of visit | `reason` on a visit; the list is `settings.visitPurposes` |
 
 ---
@@ -144,8 +144,7 @@ Other inputs you can ask for: `@Param('id') id: string` for `/api/thing/:id`, `@
 | `auth/` | sign in, create account, sign out, the guard, access labels | sign-in rules, password rules, session length |
 | `people/` | employees and admin accounts | employee fields, who can edit them |
 | `reference-data/` | units/teams, app settings, sent-email list | default settings (`DEFAULT_APP_SETTINGS`) |
-| `structure/` | Division → Region → Area → Branch, regional/area/branch offices | location rules, what the admin may change |
-| `branch-sync/` | the daily sync of BRAC's ERP branch list | sync time, how the ERP's fields map to ours |
+| `structure/` | Division → Region → Area → Branch, regional/area/branch offices | location rules, the 8 divisions (`divisions.ts`) |
 | `visits/visit-rules.ts` | **the visit rules** (plain functions, easy to read) | what happens when an entry is submitted, who sees which visits |
 | `visits/visits.service.ts` | reading/saving visits with a row lock | rarely |
 | `action-items/action-items.logic.ts` | **the action item workflow + email wording** | statuses, deadlines, reminders, email text |

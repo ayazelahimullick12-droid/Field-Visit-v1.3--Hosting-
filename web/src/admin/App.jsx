@@ -167,7 +167,7 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
         {tab === "offices" && (
           <OfficesTab offices={offices} setOffices={setOffices} structure={structure} visits={visits} reloadVisits={reloadVisits} settings={settings} setSettings={setSettings} showToast={showToast} />
         )}
-        {tab === "locations" && <LocationsTab structure={structure} onSaveStructure={saveStructure} onSynced={() => Promise.all([reloadStructure(), reloadOffices(), reloadVisits()])} offices={offices} settings={settings} setSettings={setSettings} showToast={showToast} />}
+        {tab === "locations" && <LocationsTab structure={structure} onSaveStructure={saveStructure} offices={offices} settings={settings} setSettings={setSettings} showToast={showToast} />}
         {tab === "questions" && <QuestionsTab settings={settings} setSettings={setSettings} visits={visits} showToast={showToast} />}
         {tab === "features" && <FeaturesTab settings={settings} setSettings={setSettings} showToast={showToast} />}
         {tab === "emails" && <SentEmailsTab emailLog={emailLog} onRefresh={reloadEmailLog} />}

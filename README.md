@@ -89,23 +89,9 @@ and restart the service.
 
 ## Locations
 
-**Division → Region → Area → Branch**, BRAC's own structure. It comes from **BRAC's ERP branch list**:
-
-- Set `BRAC_BRANCH_API_URL` and `BRAC_BRANCH_API_TOKEN` in `api/.env` (the token never reaches the browser).
-- The server fetches every page of the list **every day at 2:00 AM** (Bangladesh time), and when an
-  admin presses **Sync now** in **Admin → Locations & lists**. The website only reads the copy saved
-  in the database; it never calls the ERP itself.
-- A branch is only rewritten when its `updated_at` is newer or its place changed. A Regional Office
-  is made for each region and an Area Office for each area.
-- A branch (or region, area, division) that's no longer in the list is **kept but switched off**:
-  past visits still show it, the visit form no longer offers it. If it comes back, it's switched on.
-- If a sync fails partway (no connection, token refused, missing pages), **nothing is changed** and
-  the error shows on the sync card.
-- Synced rows are read-only in the admin console ("From ERP"). The admin can still add divisions,
-  regions, areas, regional/area offices and branches by hand; those stay editable.
-
-The code is in `api/src/branch-sync/branch-sync.service.ts`. On the visit form, staff pick
-Division → Region → Area, then:
+**Division → Region → Area → Branch.** Divisions are the 8 government divisions (fixed, in
+`api/src/structure/divisions.ts`). Regions and Areas are BRAC's own and are managed in
+**Admin → Locations & lists**. On the visit form, staff pick Division → Region → Area, then:
 
 | Picker | Shows |
 |---|---|

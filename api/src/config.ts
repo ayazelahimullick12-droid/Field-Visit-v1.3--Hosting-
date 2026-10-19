@@ -23,9 +23,6 @@ export const config = {
   uploadDir: process.env.UPLOAD_DIR || path.resolve(__dirname, '../uploads'),
   // the website built by `npm run build` in web/ (Next.js static export)
   webDir: process.env.WEB_DIR || path.resolve(__dirname, '../../web/out'),
-  // BRAC's ERP branch list (api/src/branch-sync): synced daily into our own tables
-  branchApiUrl: process.env.BRAC_BRANCH_API_URL || 'https://trendxstage.brac.net/api/branch/allbranchlist',
-  branchApiToken: process.env.BRAC_BRANCH_API_TOKEN || '',
   staffSessionDays: 30,
   adminSessionHours: 12,
 };

@@ -1,9 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { Target, CheckCircle2, Clock, EyeOff, Hourglass, Download, Search, ChevronRight } from "lucide-react";
+import InteractiveMap from "../../lib/InteractiveMap";
 import { StackedBarChart } from "../../lib/charts";
 import { downloadCsv, Reveal } from "../../lib/ui";
 import { coverageSummary, timeAgo, STATUS_META, toShapeName } from "../../lib/offices";
 import { Kpi, MapPanel, LocationFilterBar, EMPTY_LOCATION_FILTER, matchesLocation, drillFieldFor, DRILL_LABELS } from "./common";
+import bdDivisions from "../../lib/bd-divisions.geojson.json";
+import bdDistricts from "../../lib/bd-districts.geojson.json";
 
 const SORT_RANK = { never: 0, stale: 1, ok: 2 };
 
@@ -68,13 +71,19 @@ export default function CoverageView({ coverage, offices, visits, target, loc, s
 
   return (
     <div>
+      {/* the filters sit right beside the map, so picking one and watching the map zoom happen on the same screen */}
       <div className={mapOnly ? "" : "cov-grid"}>
         <MapPanel
-          title="Filter by place"
-          sub="Pick a division, then a region and an area."
+          title="Field-office coverage map"
+          sub="Select a division to zoom in, then a region and an area. Drag to pan; use Ctrl + scroll to zoom."
           filters={<LocationFilterBar offices={offices} value={loc} onChange={setLoc} labelled />}
           canClear={filtered} onClear={() => setLoc(EMPTY_LOCATION_FILTER)}
         >
+          <InteractiveMap
+            divisions={bdDivisions} districts={bdDistricts} offices={coverage}
+            mode={mode} onModeChange={setMode} filter={loc} onFilter={setLoc} onOpenBranch={onOpenBranch}
+            visitValues={visitValues} targetDays={target}
+          />
         </MapPanel>
 
         {!mapOnly && <div className="card card-pad" style={{ minWidth: 0, display: "flex", flexDirection: "column" }}>

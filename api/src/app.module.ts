@@ -17,8 +17,6 @@ import { MailService } from './mail/mail.service';
 import { UploadsController } from './uploads/uploads.controller';
 import { PublicController } from './public/public.controller';
 import { StructureController } from './structure/structure.controller';
-import { BranchSyncController } from './branch-sync/branch-sync.controller';
-import { BranchSyncService } from './branch-sync/branch-sync.service';
 
 /**
  * The whole API. To add a feature: write a controller (endpoints) and, if it has rules,
@@ -36,7 +34,6 @@ import { BranchSyncService } from './branch-sync/branch-sync.service';
     PeopleController,
     ReferenceDataController,
     StructureController,
-    BranchSyncController,
     VisitsController,
     ActionItemsController,
     MailController,
@@ -47,7 +44,6 @@ import { BranchSyncService } from './branch-sync/branch-sync.service';
     VisitsService,
     ActionItemsService,
     MailService,
-    BranchSyncService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
