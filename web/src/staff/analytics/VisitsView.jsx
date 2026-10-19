@@ -1,12 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { MapPin, Building2, Star, UserRound, Users, ShieldCheck } from "lucide-react";
-import InteractiveMap from "../../lib/InteractiveMap";
 import { RankedBarChart, TrendLineChart } from "../../lib/charts";
 import { Reveal } from "../../lib/ui";
 import { average, visitChecks, visitRatings, clientsHeard, CHECK_LABELS, monthBuckets, monthKeyOf, toShapeName } from "../../lib/offices";
 import { Kpi, MapPanel, LocationFilterBar, DateFilterBar, EMPTY_LOCATION_FILTER, EMPTY_DATE_FILTER, SERIES_COLORS, matchesLocation, matchesDate, drillFieldFor, DRILL_LABELS } from "./common";
-import bdDivisions from "../../lib/bd-divisions.geojson.json";
-import bdDistricts from "../../lib/bd-districts.geojson.json";
 
 const fmt = (n) => (n == null ? "—" : `${n.toFixed(1)}`);
 
@@ -94,11 +91,10 @@ export default function VisitsView({ visits, coverage, offices, showCoverage = f
 
   return (
     <div>
-      {/* filters live beside the map, so choosing one and watching the map zoom happen on the same screen */}
       <div className="cov-grid" style={{ marginBottom: 16 }}>
         <MapPanel
-          title="Visit density"
-          sub="Where visits are concentrated — and where they aren't. Click through to zoom into districts and area offices."
+          title="Filters"
+          sub="Narrow the visits below by place and date."
           filters={
             <>
               <LocationFilterBar offices={offices} value={loc} onChange={setLoc} labelled />
@@ -107,11 +103,6 @@ export default function VisitsView({ visits, coverage, offices, showCoverage = f
           }
           canClear={filtersActive} onClear={() => { setLoc(EMPTY_LOCATION_FILTER); setDate(EMPTY_DATE_FILTER); }}
         >
-          <InteractiveMap
-            divisions={bdDivisions} districts={bdDistricts} offices={coverage}
-            mode={mode} onModeChange={setMode} filter={loc} onFilter={setLoc} onOpenBranch={onOpenBranch}
-            visitValues={visitValues} targetDays={target} showCoverage={showCoverage}
-          />
         </MapPanel>
         {visitsByLevel}
       </div>

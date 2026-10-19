@@ -108,21 +108,18 @@ export function LocationFilterBar({ offices, value, onChange, labelled = false }
 
 /** A map with its filters right beside it (stacked above it on small screens), so changing a
     filter and watching the map zoom happen on the same screen. */
-export function MapPanel({ title, sub, filters, canClear, onClear, children }) {
+/** The filters card (it used to hold a map; BRAC's own divisions have no map shapes, so it's filters only). */
+export function MapPanel({ title, sub, filters, canClear, onClear }) {
   return (
-    <div className="card card-pad map-panel" style={{ minWidth: 0 }}>
-      <p className="analytics-card-title">{title}</p>
-      <p className="analytics-card-sub">{sub}</p>
-      <div className="map-panel-body">
-        <div className="map-filters">
-          <div className="mf-head">
-            <span>Filters</span>
-            {canClear && <button className="mf-clear" onClick={onClear}>Clear</button>}
-          </div>
-          {filters}
+    <div className="card card-pad" style={{ minWidth: 0 }}>
+      <div className="section-header" style={{ marginBottom: 6 }}>
+        <div>
+          <p className="analytics-card-title" style={{ marginBottom: 2 }}>{title}</p>
+          {sub && <p className="analytics-card-sub" style={{ margin: 0 }}>{sub}</p>}
         </div>
-        <div className="map-stage">{children}</div>
+        {canClear && <button className="mf-clear" onClick={onClear}>Clear</button>}
       </div>
+      <div className="sf-row">{filters}</div>
     </div>
   );
 }

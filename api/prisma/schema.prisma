@@ -60,23 +60,42 @@ model Unit {
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
 }
 
-// ---- Where things are: Division → Region → Area → Branch ----
-// Divisions are the 8 government divisions (fixed, see api/src/structure/divisions.ts).
-// Regions and Areas are BRAC's own and are maintained by the admin.
+// ---- Where things are: Division → Region → Area → Branch (BRAC's own structure) ----
+// Most rows come from BRAC's ERP branch list (source "erp", see api/src/branch-sync): they are
+// read-only in the admin console and kept up to date by the daily sync. The admin can add more
+// by hand (source "admin"). A row the ERP no longer lists is kept but switched off (active false),
+// so past visits still find it while new visits can't choose it.
+// externalId = the ERP's id (division_id, region_id, area_id, branch_id); erpCode = DO…/RO…/AO… codes.
+
+model Division {
+  id         String  @id
+  name       String  @unique // e.g. "North East"
+  externalId String? @unique
+  erpCode    String?
+  source     String  @default("admin")
+  active     Boolean @default(true)
+  sortOrder  Int     @default(0)
+}
 
 model Region {
-  id        String  @id
-  name      String  @unique
-  division  String // e.g. "Dhaka Division"
-  active    Boolean @default(true)
-  sortOrder Int     @default(0)
-  areas     Area[]
+  id         String  @id
+  name       String  @unique
+  division   String // the Division's name
+  externalId String? @unique
+  erpCode    String?
+  source     String  @default("admin")
+  active     Boolean @default(true)
+  sortOrder  Int     @default(0)
+  areas      Area[]
 }
 
 model Area {
-  id        String  @id
-  name      String
-  regionId  String
+  id         String  @id
+  name       String
+  externalId String? @unique
+  erpCode    String?
+  source     String  @default("admin")
+  regionId   String
   region    Region  @relation(fields: [regionId], references: [id], onDelete: Restrict)
   active    Boolean @default(true)
   sortOrder Int     @default(0)
@@ -99,6 +118,10 @@ model Office {
   lat       Float?
   lng       Float?
   active    Boolean @default(true)
+  externalId      String? @unique // branch_id, or "RO:<region_id>" / "AO:<area_id>" for regional / area offices
+  erpCode         String?
+  source          String  @default("admin")
+  sourceUpdatedAt String? // the ERP's updated_at for this branch, e.g. "2025-11-12 23:20:12"
   sortOrder Int     @default(0)
 }
 

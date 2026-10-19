@@ -1,26 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { kvGet, kvSet } from "./offline";
 
 const API_BASE = "/api";
 
 // Reference data the staff app needs to open with no signal (who is signed in,
-// units and teams, the office list, settings). A copy is kept in localStorage
+// units and teams, the office list, settings). A copy is kept in the browser's
+// IndexedDB (room for the ~12,700 synced branches, unlike localStorage's ~5 MB)
 // after every successful load. Passwords are never kept on the device.
 const OFFLINE_COPY = new Set(["employees", "departments", "offices", "structure", "settings"]);
 const cacheKey = (name) => `fvt-cache:${name}`;
 const withoutSecrets = (data) => (Array.isArray(data) ? data.map(({ password, ...rest }) => rest) : data);
 
-function readCopy(name) {
+async function readCopy(name) {
   if (!OFFLINE_COPY.has(name)) return undefined;
-  try {
-    const raw = localStorage.getItem(cacheKey(name));
-    return raw ? JSON.parse(raw) : undefined;
-  } catch {
-    return undefined;
-  }
+  return (await kvGet(cacheKey(name))) ?? undefined;
 }
 function writeCopy(name, data) {
   if (!OFFLINE_COPY.has(name)) return;
-  try { localStorage.setItem(cacheKey(name), JSON.stringify(withoutSecrets(data))); } catch { /* storage full or blocked */ }
+  kvSet(cacheKey(name), withoutSecrets(data)); // never throws: a full or blocked store just means no offline copy
+  try { localStorage.removeItem(cacheKey(name)); } catch { /* old copies lived here */ }
 }
 
 /**
@@ -71,8 +69,8 @@ export function usePersistedCollection(name, fallback) {
           setLoaded(true);
         }
       })
-      .catch((err) => {
-        const copy = readCopy(name);
+      .catch(async (err) => {
+        const copy = await readCopy(name);
         if (copy !== undefined) {
           if (!cancelled) { fromDeviceCopy.current = true; setData(copy); setLoaded(true); }
           return;

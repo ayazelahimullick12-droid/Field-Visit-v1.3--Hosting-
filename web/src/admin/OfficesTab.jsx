@@ -15,7 +15,7 @@ import { api } from "../lib/session";
 
 // Bangladesh sits roughly between these bounds; anything outside is a typo.
 const LAT = [20.5, 26.8], LNG = [88.0, 92.8];
-const PAGE = 15;
+const PAGE = 50;
 
 const emptyForm = () => ({ name: "", area: "", division: "", district: "", lat: "", lng: "" }); // district = region
 
@@ -51,7 +51,7 @@ export default function OfficesTab({ offices, setOffices, structure, visits, rel
   const [query, setQuery] = useState("");
   const [division, setDivision] = useState("All");
   const [state, setState] = useState("all"); // all | never | stale | ok | inactive
-  const [showAll, setShowAll] = useState(false);
+  const [extra, setExtra] = useState(0); // "Show more" adds 200 rows at a time (synced lists are long)
   const [editing, setEditing] = useState(null); // null | "new" | office
   const fileRef = useRef(null);
 
@@ -74,7 +74,7 @@ export default function OfficesTab({ offices, setOffices, structure, visits, rel
       })
       .sort((a, b) => a.o.division.localeCompare(b.o.division) || a.o.district.localeCompare(b.o.district) || a.o.name.localeCompare(b.o.name));
   }, [offices, covByKey, query, division, state]);
-  const shown = showAll ? rows : rows.slice(0, PAGE);
+  const shown = rows.slice(0, PAGE + extra);
 
   const saveTarget = () => {
     const n = Math.round(Number(targetDraft));
@@ -138,7 +138,7 @@ export default function OfficesTab({ offices, setOffices, structure, visits, rel
         <div>
           <p className="h-eyebrow">Configuration</p>
           <h1 className="h-title">Branch offices</h1>
-          <p className="h-desc">The branches behind the visit form, the coverage map and management's "never visited" tracking. Each branch sits in an Area of a Region. Add regions, areas, regional and area offices on <b>Locations &amp; lists</b>.</p>
+          <p className="h-desc">The branches behind the visit form and management's "branches visited" figures. Most come from BRAC's ERP branch list (synced every night, read-only here); you can add others by hand. Each branch sits in an Area of a Region. Divisions, regions, areas, regional and area offices are on <b>Locations &amp; lists</b>.</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()}><Upload size={14} /> Import CSV</button>
@@ -180,15 +180,15 @@ export default function OfficesTab({ offices, setOffices, structure, visits, rel
       <div className="toolbar">
         <div className="search-box">
           <Search size={16} />
-          <input className="input" placeholder="Search branch, area, region…" value={query} onChange={(e) => { setQuery(e.target.value); setShowAll(false); }} />
+          <input className="input" placeholder="Search branch, area, region…" value={query} onChange={(e) => { setQuery(e.target.value); setExtra(0); }} />
         </div>
-        <select className="select" style={{ width: "auto", minWidth: 170 }} value={division} onChange={(e) => { setDivision(e.target.value); setShowAll(false); }} aria-label="Division">
+        <select className="select" style={{ width: "auto", minWidth: 170 }} value={division} onChange={(e) => { setDivision(e.target.value); setExtra(0); }} aria-label="Division">
           <option value="All">All divisions</option>
           {DIVISIONS.map((d) => <option key={d}>{d}</option>)}
         </select>
         <div className="filter-chips">
           {[["all", "All"], ["never", "Never visited"], ["stale", "Overdue"], ["ok", "On track"], ["inactive", "Retired"]].map(([k, label]) => (
-            <button key={k} className={`filter-chip ${state === k ? "active" : ""}`} onClick={() => { setState(k); setShowAll(false); }}>{label}</button>
+            <button key={k} className={`filter-chip ${state === k ? "active" : ""}`} onClick={() => { setState(k); setExtra(0); }}>{label}</button>
           ))}
         </div>
       </div>
@@ -207,19 +207,23 @@ export default function OfficesTab({ offices, setOffices, structure, visits, rel
                 const meta = cov ? STATUS_META[cov.status] : null;
                 return (
                   <tr key={o.id} style={retired ? { opacity: 0.6 } : undefined}>
-                    <td data-label="Branch"><div className="cell-main">{o.name}</div><div className="cell-sub mono">{o.id}</div></td>
+                    <td data-label="Branch"><div className="cell-main">{o.name}</div><div className="cell-sub">{o.source === "erp" ? "From ERP" : <span className="mono">{o.id}</span>}</div></td>
                     <td data-label="Location"><div className="cell-main">{o.area}</div><div className="cell-sub">{o.district} · {o.division}</div></td>
-                    <td data-label="Status">{retired ? <span className="pill pill-brand">Retired</span> : meta && <span className={`pill ${meta.pill}`}>{meta.short}</span>}</td>
+                    <td data-label="Status">{retired ? <span className="pill pill-brand">{o.source === "erp" ? "No longer in ERP" : "Retired"}</span> : meta && <span className={`pill ${meta.pill}`}>{meta.short}</span>}</td>
                     <td data-label="Last visit">{cov?.lastDate ? <><div className="cell-main">{timeAgo(cov.daysSince)}</div><div className="cell-sub">{cov.lastDate}</div></> : <span style={{ color: "var(--ink-faint)" }}>—</span>}</td>
                     <td data-label="Visits">{cov ? cov.visitCount : "—"}</td>
                     <td data-label="Map pin" className="mono" style={{ fontSize: 11.5 }}>
                       {Number.isFinite(o.lat) && Number.isFinite(o.lng) ? `${o.lat.toFixed(3)}, ${o.lng.toFixed(3)}` : <span style={{ color: "var(--ink-faint)" }}>approximate</span>}
                     </td>
                     <td data-label="" style={{ textAlign: "right" }}>
-                      <div className="row-actions">
-                        <button className="btn btn-secondary btn-sm" onClick={() => setEditing(o)}><Edit3 size={12} /> Edit</button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => toggleActive(o)} title={retired ? "Reactivate" : "Retire"}><Power size={13} /> {retired ? "Reactivate" : "Retire"}</button>
-                      </div>
+                      {o.source === "erp" ? (
+                        <span className="field-hint" title="Synced from BRAC's ERP. Change it in the ERP; the next sync brings it here.">Synced</span>
+                      ) : (
+                        <div className="row-actions">
+                          <button className="btn btn-secondary btn-sm" onClick={() => setEditing(o)}><Edit3 size={12} /> Edit</button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => toggleActive(o)} title={retired ? "Reactivate" : "Retire"}><Power size={13} /> {retired ? "Reactivate" : "Retire"}</button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -229,9 +233,9 @@ export default function OfficesTab({ offices, setOffices, structure, visits, rel
         </div>
       )}
 
-      {rows.length > PAGE && (
+      {rows.length > shown.length && (
         <div style={{ textAlign: "center", marginTop: 14 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => setShowAll((s) => !s)}>{showAll ? "Show fewer" : `Show all ${rows.length}`}</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setExtra((n) => n + 200)}>Show more ({rows.length - shown.length} left)</button>
         </div>
       )}
 
