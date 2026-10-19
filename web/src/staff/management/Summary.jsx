@@ -27,8 +27,9 @@ const STATUS_WORDS = [
   ["Assigned", "Given to a department", "var(--info)"],
   ["In Progress", "Being worked on", "var(--warning)"],
   ["Long Term", "Long-term work", "var(--magenta)"],
-  ["Fixed", "Fixed", "var(--success)"],
+  ["Fixed", "Resolved", "var(--success)"],
 ];
+const URGENCIES = [["High", "var(--danger)"], ["Medium", "var(--warning)"], ["Low", "var(--line)"]];
 const REASON_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--series-5)"];
 
 const DEFAULT_FILTERS = { period: "30d", from: "", to: "", loc: EMPTY_LOCATION_FILTER };
@@ -111,6 +112,8 @@ export function figures({ trips, records, offices, settings, f, employees = [], 
   // --- why, and when in the day ---
   const reasons = countBy(visits, (v) => reasonText(v) || "Not given");
   const shownReasons = reasons.slice(0, 4);
+  // visits per division ("Dhaka Division" shown as "Dhaka")
+  const divisions = countBy(visits, (v) => (v.division || "Not set").replace(/ Division$/, ""));
   const otherReasons = reasons.slice(4).reduce((s, [, n]) => s + n, 0);
   // --- problems (action items) raised in the period; their status is as of today ---
   const items = submittedComplaints(trips).filter((c) => matchesLocation(c, loc));
@@ -145,12 +148,14 @@ export function figures({ trips, records, offices, settings, f, employees = [], 
       teams: [...r.teams.entries()].sort((a, b) => (a[0] === "Team not set") - (b[0] === "Team not set") || b[1] - a[1]),
     })),
     upcomingOffices: new Set(upcoming.flatMap((v) => (v.stops || []).map((x) => x.name))).size,
+    divisions,
     reasons: [...shownReasons, ...(otherReasons ? [["Other purposes", otherReasons]] : [])],
 
     raised: raised.length, raisedBefore, fixed: fixed.length, open: open.length,
     daysToFix: daysToFix(fixed),
     waiting: raised.filter((c) => statusOf(c) === "Waiting").length,
     highOpen: open.filter((c) => c.urgency === "High").length,
+    byUrgency: URGENCIES.map(([u, color]) => ({ label: u, color, value: raised.filter((c) => c.urgency === u).length })),
     byStatus: STATUS_WORDS.map(([key, label, color]) => ({ label, color, value: raised.filter((c) => statusOf(c) === key).length })),
     units,
 
@@ -205,7 +210,7 @@ export default function Summary({ trips, records, offices = [], employees = [], 
         <p className="s1-when">{words.now}{Object.values(f.loc).some((v) => v !== "All") ? ` · ${[f.loc.division, f.loc.region, f.loc.area, f.loc.branch].filter((v) => v !== "All").join(" › ")}` : " · all of Bangladesh"}</p>
         <p>
           {plural(F.staff, "staff member")} made <b>{plural(F.visits, "visit")}</b> to {plural(F.officesReached, "office")}.
-          They registered <b>{plural(F.raised, "action item")}</b> ({F.fixed} already fixed)
+          They registered <b>{plural(F.raised, "action item")}</b> ({F.fixed} already resolved)
           {F.talks ? <>, reached <b>{plural(F.talks, "client")}</b></> : ""}
           {F.stories ? <>, and shared <b>{plural(F.stories, "story", "stories")}</b></> : ""}.
         </p>
@@ -290,6 +295,7 @@ function VisitsPanel({ F, words }) {
       <div className="s1-panel-bottom">
         <MiniBar label="Purpose of visit" parts={purposes} />
         <MiniBar label="Visits by unit" parts={units} foot={teams.length ? `Teams: ${teams.join(" · ")}` : null} />
+        <MiniBar label="Visits by division" parts={F.divisions.map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }))} />
       </div>
     </div>
   );
@@ -319,7 +325,7 @@ const DEPT_SHADES = [85, 65, 48, 34, 24, 16].map((n) => `color-mix(in srgb, var(
 
 /**
  * Issues found in one card, shaped like the visits panel: registered action items (with the change
- * from the period before) on the left, Fixed and Still open on the right, and where they stand and
+ * from the period before) on the left, Resolved and Unresolved on the right, and where they stand, their urgency and
  * which departments they went to along the bottom. The department bar is left off the public page.
  */
 function IssuesPanel({ F, words, publicView }) {
@@ -341,21 +347,22 @@ function IssuesPanel({ F, words, publicView }) {
         </div>
         <div className="s1-panel-side">
           <div className="s1-mini" style={{ "--tone": "var(--success)" }}>
-            <div className="s1-top"><span className="s1-label">Fixed</span><CheckCircle2 size={15} className="s1-icon" /></div>
+            <div className="s1-top"><span className="s1-label">Resolved</span><CheckCircle2 size={15} className="s1-icon" /></div>
             <p className="s1-num">{F.fixed}<span className="s1-of"> of {F.raised}</span></p>
             <div className="s1-progress"><span style={{ width: `${pct(F.fixed, F.raised)}%` }} /></div>
             <p className="s1-note">{F.raised ? `${pct(F.fixed, F.raised)}%${F.daysToFix != null ? ` · ${daysText(F.daysToFix)} on average` : ""}` : "Nothing registered in this period."}</p>
           </div>
           <div className="s1-mini">
-            <div className="s1-top"><span className="s1-label">Still open</span><CircleDot size={15} className="s1-icon" /></div>
+            <div className="s1-top"><span className="s1-label">Unresolved</span><CircleDot size={15} className="s1-icon" /></div>
             <p className="s1-num">{F.open}<span className="s1-of"> of {F.raised}</span></p>
             <div className="s1-progress"><span style={{ width: `${pct(F.open, F.raised)}%` }} /></div>
-            <p className="s1-note">{F.open ? `${F.highOpen} of them ${F.highOpen === 1 ? "is" : "are"} high urgency.` : "Everything registered is fixed."}</p>
+            <p className="s1-note">{F.open ? `${F.highOpen} of them ${F.highOpen === 1 ? "is" : "are"} high urgency.` : "Everything registered is resolved."}</p>
           </div>
         </div>
       </div>
       <div className="s1-panel-bottom">
         <MiniBar label="Where they stand" parts={statuses} />
+        <MiniBar label="Urgency" parts={F.byUrgency.filter((x) => x.value)} />
         {!publicView && <MiniBar label="By department" parts={depts} foot={F.waiting ? `${F.waiting} not given to a department yet.` : null} />}
       </div>
     </div>
