@@ -8,7 +8,7 @@ field-visit-tracker/
 ├── api/                    NestJS API (TypeScript)
 │   ├── prisma/schema.prisma    database tables  ← start here to understand the data
 │   ├── prisma/migrations/      database changes, applied with `npm run db:migrate`
-│   ├── prisma/seed.ts          creates the first admin
+│   ├── prisma/seed.js          creates the first admin
 │   ├── prisma/import-json.ts   imports the prototype's db.json
 │   └── src/
 │       ├── main.ts                 starts the server (API + website + uploads)

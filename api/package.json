@@ -7,7 +7,7 @@
     "start": "node dist/main.js",
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "db:migrate": "prisma migrate deploy",
-    "db:seed": "ts-node --transpile-only prisma/seed.ts",
+    "db:seed": "node prisma/seed.js",
     "db:import": "ts-node --transpile-only prisma/import-json.ts",
     "db:local": "node scripts/local-postgres.js"
   },
@@ -21,6 +21,7 @@
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "nodemailer": "^10.1.2",
+    "prisma": "^6.19.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
@@ -31,7 +32,6 @@
     "@types/node": "^22.20.5",
     "@types/nodemailer": "^8.0.2",
     "embedded-postgres": "^18.4.0-beta.17",
-    "prisma": "^6.19.3",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "5.6"
