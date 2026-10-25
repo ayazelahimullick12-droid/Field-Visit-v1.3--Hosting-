@@ -45,6 +45,11 @@ npm run setup
 3. `npm run dev:api` — API on http://localhost:4000
 4. `npm run dev:web` — website on http://localhost:3000 (open this one while developing)
 
+## Put it on Railway
+
+See **[docs/DEPLOY-RAILWAY.md](docs/DEPLOY-RAILWAY.md)**: step by step, from creating the account to the first sign-in.
+The project already tells Railway how to build and start it (`railway.json`).
+
 ## Put it on the server
 
 Works on Linux (recommended: Ubuntu 22.04/24.04) or Windows Server.
