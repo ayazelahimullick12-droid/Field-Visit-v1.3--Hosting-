@@ -3,7 +3,7 @@ import { MapPin, Building2, Star, UserRound, Users, ShieldCheck } from "lucide-r
 import InteractiveMap from "../../lib/InteractiveMap";
 import { RankedBarChart, TrendLineChart } from "../../lib/charts";
 import { Reveal } from "../../lib/ui";
-import { average, visitChecks, visitRatings, clientsHeard, CHECK_LABELS, monthBuckets, monthKeyOf, toShapeName } from "../../lib/offices";
+import { average, visitChecks, visitRatings, clientsHeard, CHECK_LABELS, monthBuckets, monthKeyOf, toShapeName, placeValues } from "../../lib/offices";
 import { Kpi, MapPanel, LocationFilterBar, DateFilterBar, EMPTY_LOCATION_FILTER, EMPTY_DATE_FILTER, SERIES_COLORS, matchesLocation, matchesDate, drillFieldFor, DRILL_LABELS } from "./common";
 import bdDivisions from "../../lib/bd-divisions.geojson.json";
 import bdDistricts from "../../lib/bd-districts.geojson.json";
@@ -54,16 +54,19 @@ export default function VisitsView({ visits, coverage, offices, showCoverage = f
     if (!field) return null;
     const counts = {}, ratings = {};
     filtered.forEach((v) => {
-      const k = v[field] || "Unspecified";
-      counts[k] = (counts[k] || 0) + 1;
+      // a visit to a branch in two areas counts in both
+      const keys = field === "location" ? [v.location] : placeValues(v, field, loc);
       const r = visitRatings(v);
-      if (r.length) (ratings[k] = ratings[k] || []).push(...r);
+      (keys.length ? keys : ["Unspecified"]).forEach((k) => {
+        counts[k] = (counts[k] || 0) + 1;
+        if (r.length) (ratings[k] = ratings[k] || []).push(...r);
+      });
     });
     return {
       counts: Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([label, value], i) => ({ label, value, color: SERIES_COLORS[i % SERIES_COLORS.length] })),
       ratings: Object.entries(ratings).map(([label, rs], i) => ({ label, value: Number(average(rs).toFixed(1)), color: SERIES_COLORS[i % SERIES_COLORS.length] })).sort((a, b) => b.value - a.value),
     };
-  }, [filtered, field]);
+  }, [filtered, field, loc]);
 
   const reasons = useMemo(() => {
     const c = {};
@@ -85,7 +88,7 @@ export default function VisitsView({ visits, coverage, offices, showCoverage = f
       ) : (
         <>
           <p className="analytics-card-title">Visits by {DRILL_LABELS[field].toLowerCase()}</p>
-          <p className="analytics-card-sub">{loc.division === "All" ? "Nationwide. Select a division to view districts, then areas and branches." : "Within your current selection."}</p>
+          <p className="analytics-card-sub">{loc.division === "All" ? "Nationwide. Select a division to view its regions, then areas and branches." : "Within your current selection."}</p>
           <RankedBarChart items={drill.counts} />
         </>
       )}

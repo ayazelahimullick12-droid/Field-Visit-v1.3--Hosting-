@@ -12,7 +12,7 @@ import { useTheme } from "../lib/theme";
 import AppShell from "../lib/AppShell";
 import { Reveal } from "../lib/ui";
 import { Kpi } from "../staff/analytics/common";
-import { DEFAULT_SETTINGS, computeCoverage } from "../lib/offices";
+import { DEFAULT_SETTINGS, computeCoverage, setOfficeDirectory } from "../lib/offices";
 import { PersonDetails } from "../lib/PersonInfo";
 import { TERMS, lower } from "../lib/terms";
 import Resolution from "../lib/Resolution";
@@ -102,19 +102,18 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
   // employees are saved one at a time (api calls in EmployeesTab), then re-read
   const [employees, , , reloadEmployees] = usePersistedCollection("employees", []);
   const [emailLog, , , reloadEmailLog] = usePersistedCollection("emailLog", []);
-  const [offices, setOffices, , reloadOffices] = usePersistedCollection("offices", []);
-  // regions, areas, regional and area offices (Locations & lists tab); saved through the API, then re-read
+  // locations come from BRAC's branch API (read-only here); re-read after a sync
+  const [offices, , , reloadOffices] = usePersistedCollection("offices", []);
   const [structure, , , reloadStructure] = usePersistedCollection("structure", {});
-  const saveStructure = async (next) => {
-    await api("/structure", { method: "PUT", body: next });
-    await Promise.all([reloadStructure(), reloadOffices(), reloadVisits()]);
-  };
+  const reloadLocations = () => Promise.all([reloadStructure(), reloadOffices()]);
+  // where every office is (a branch can sit in several areas): read by the filters and figures
+  const directory = useMemo(() => { setOfficeDirectory(offices, structure); return {}; }, [offices, structure]);
   const [settings, setSettings] = usePersistedCollection("settings", DEFAULT_SETTINGS);
 
   // Each complaint reaches the admin as soon as the field person submits it.
   const complaints = useMemo(() => submittedComplaints(visits), [visits]);
   // The coverage map and Branch 360° read one record per office of each visit.
-  const reportVisits = useMemo(() => expandVisits(visits), [visits]);
+  const reportVisits = useMemo(() => expandVisits(visits), [visits, directory]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshAfterAction = async () => {
     // read only: writing the whole list back could undo entries field staff saved meanwhile
@@ -165,9 +164,9 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
           <EmployeesTab employees={employees} reloadEmployees={reloadEmployees} departments={departments} showToast={showToast} currentAdmin={currentAdmin} />
         )}
         {tab === "offices" && (
-          <OfficesTab offices={offices} setOffices={setOffices} structure={structure} visits={visits} reloadVisits={reloadVisits} settings={settings} setSettings={setSettings} showToast={showToast} />
+          <OfficesTab offices={offices} structure={structure} visits={visits} settings={settings} setSettings={setSettings} showToast={showToast} />
         )}
-        {tab === "locations" && <LocationsTab structure={structure} onSaveStructure={saveStructure} offices={offices} settings={settings} setSettings={setSettings} showToast={showToast} />}
+        {tab === "locations" && <LocationsTab structure={structure} offices={offices} onLocationsChanged={reloadLocations} settings={settings} setSettings={setSettings} showToast={showToast} />}
         {tab === "questions" && <QuestionsTab settings={settings} setSettings={setSettings} visits={visits} showToast={showToast} />}
         {tab === "features" && <FeaturesTab settings={settings} setSettings={setSettings} showToast={showToast} />}
         {tab === "emails" && <SentEmailsTab emailLog={emailLog} onRefresh={reloadEmailLog} />}

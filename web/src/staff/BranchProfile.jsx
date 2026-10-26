@@ -6,6 +6,7 @@ import { statusOf, statusClass, isFixed, complaintTitle } from "../lib/complaint
 import { TrendLineChart } from "../lib/charts";
 import { Kpi } from "./analytics/common";
 import BdOutline from "../lib/BdOutline";
+import { FEATURES } from "../lib/features";
 import bdDistricts from "../lib/bd-districts.geojson.json";
 import {
   STATUS_META, timeAgo, average, visitChecks, visitRatings, clientsHeard, monthBuckets, monthKeyOf, districtShapeName, MONTH_LABELS,
@@ -124,9 +125,22 @@ export default function BranchProfile({ office, coverageRows, onBack, onNewVisit
         <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
           <Reveal className="card card-pad" i={2}>
             <p className="analytics-card-title">Where it is</p>
-            <p className="analytics-card-sub">{row.area} · {siblings.length} office{siblings.length === 1 ? "" : "s"} in {row.district}</p>
-            <MiniLocator office={row} siblings={siblings} />
-            {!(Number.isFinite(row.lat) && Number.isFinite(row.lng)) && <p className="field-hint">No coordinates on file for this office yet.</p>}
+            {FEATURES.maps ? (
+              <>
+                <p className="analytics-card-sub">{row.area} · {siblings.length} office{siblings.length === 1 ? "" : "s"} in {row.district}</p>
+                <MiniLocator office={row} siblings={siblings} />
+                {!(Number.isFinite(row.lat) && Number.isFinite(row.lng)) && <p className="field-hint">No coordinates on file for this office yet.</p>}
+              </>
+            ) : (
+              <>
+                <p className="analytics-card-sub">{row.code ? `Branch code ${row.code} · ` : ""}{(row.placements || []).length > 1 ? `listed in ${row.placements.length} areas` : "Division › Region › Area"}</p>
+                <ul className="place-list">
+                  {(row.placements?.length ? row.placements : [{ division: row.division, region: row.district, area: row.area }]).map((p) => (
+                    <li key={`${p.division}|${p.region}|${p.area}`}>{[p.division, p.region, p.area].filter(Boolean).join(" › ")}</li>
+                  ))}
+                </ul>
+              </>
+            )}
           </Reveal>
           <Reveal className="card card-pad" i={3}>
             <p className="analytics-card-title">Rating trend</p>

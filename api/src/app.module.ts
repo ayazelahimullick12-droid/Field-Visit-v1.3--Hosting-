@@ -17,6 +17,8 @@ import { MailService } from './mail/mail.service';
 import { UploadsController } from './uploads/uploads.controller';
 import { PublicController } from './public/public.controller';
 import { StructureController } from './structure/structure.controller';
+import { LocationsController } from './locations/locations.controller';
+import { LocationsService } from './locations/locations.service';
 
 /**
  * The whole API. To add a feature: write a controller (endpoints) and, if it has rules,
@@ -34,6 +36,7 @@ import { StructureController } from './structure/structure.controller';
     PeopleController,
     ReferenceDataController,
     StructureController,
+    LocationsController,
     VisitsController,
     ActionItemsController,
     MailController,
@@ -44,6 +47,7 @@ import { StructureController } from './structure/structure.controller';
     VisitsService,
     ActionItemsService,
     MailService,
+    LocationsService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { MapPin } from "lucide-react";
 import { useTheme } from "../lib/theme";
 import { expandVisits } from "../lib/visits";
-import { computeCoverage, DEFAULT_SETTINGS } from "../lib/offices";
+import { computeCoverage, DEFAULT_SETTINGS, setOfficeDirectory } from "../lib/offices";
 import Summary from "../staff/management/Summary";
 
 /* The public summary (/summary.html): the Management Summary for the last 30 days, for anyone
@@ -29,7 +29,11 @@ export default function App() {
       .catch(() => setError(true));
   }, []);
 
-  const records = useMemo(() => (data ? expandVisits(data.visits) : []), [data]);
+  const records = useMemo(() => {
+    if (!data) return [];
+    setOfficeDirectory(data.offices); // where every branch is (a branch can sit in several areas)
+    return expandVisits(data.visits);
+  }, [data]);
   const coverage = useMemo(
     () => (data ? computeCoverage(data.offices, records, data.settings.visitTargetDays || 90) : []),
     [data, records]

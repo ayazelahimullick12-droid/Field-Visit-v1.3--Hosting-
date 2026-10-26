@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { X, Building2, Users, Check, MapPin, ChevronDown } from "lucide-react";
-import { voName, voBranch, placeOfStop, shortName } from "../../lib/visits";
+import { voName, voBranch, placeOfStop, placeKey, shortName } from "../../lib/visits";
 
 /* Where a visit goes, and which offices each entry is about.
-   A visit is registered for one Division → Region → Area (from the admin's Locations list).
+   A visit is registered for one Division → Region → Area (from BRAC's branch API).
    Within it, the offices are picked from three lists — Regional Offices (all in the division),
    Area Offices (all in the region) and Branch Offices (all in the area) — several of each,
    and village organisations (VOs) are typed in as codes under a chosen branch. */
@@ -11,15 +11,15 @@ import { voName, voBranch, placeOfStop, shortName } from "../../lib/visits";
 export const KIND_TITLE = { region: "Regional Office", area: "Area Office", branch: "Branch Office" };
 
 /** The three lists of offices that can be picked for a visit's division / region / area
- *  (the Regional and Area Offices are the admin's, carried on the tree: see buildLocationTree). */
+ *  (the Regional and Area Offices are carried on the tree: see buildLocationTree). Each carries its office id. */
 export function officeOptions(tree, division, region, area) {
   const areas = (tree[division] || {})[region] || {};
   return {
     region: (tree.regionalOffices || []).filter((o) => o.division === division)
-      .map((o) => ({ division, region: "", area: "", office: o.name, officeKind: "region", branch: "" })),
-    area: (tree.areaOffices || []).filter((o) => o.region === region)
-      .map((o) => ({ division, region, area: "", office: o.name, officeKind: "area", branch: "" })),
-    branch: (areas[area] || []).map((b) => ({ division, region, area, office: b, officeKind: "branch", branch: b })),
+      .map((o) => ({ division, region: o.region || "", area: "", office: o.name, officeId: o.id, officeKind: "region", branch: "" })),
+    area: (tree.areaOffices || []).filter((o) => o.division === division && o.region === region)
+      .map((o) => ({ division, region, area: o.area || "", office: o.name, officeId: o.id, officeKind: "area", branch: "" })),
+    branch: (areas[area] || []).map((b) => ({ division, region, area, office: b.name, officeId: b.id, officeKind: "branch", branch: b.name })),
   };
 }
 
@@ -28,6 +28,7 @@ export const stopsToPlaces = (v) => (v.stops || []).map((s) => placeOfStop(s, v)
 export const placesToStops = (places) => places.map((p) => ({
   kind: p.officeKind === "branch" ? "branch" : p.officeKind === "vo" ? "vo" : "office",
   name: p.office, division: p.division, region: p.region, area: p.area,
+  ...(p.officeId ? { officeId: p.officeId } : {}), ...(p.branchOfficeId ? { branchOfficeId: p.branchOfficeId } : {}),
 }));
 
 /* ------------------------------ Division → Region → Area ------------------------------ */
@@ -76,7 +77,7 @@ function MultiSelect({ id, label, options, selected, onToggle, disabled, placeho
     document.addEventListener("keydown", onKey, true);
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey, true); };
   }, [open]);
-  const chosen = options.filter((o) => selected.includes(o.office));
+  const chosen = options.filter((o) => selected.includes(placeKey(o)));
   const text = chosen.length === 0 ? placeholder : chosen.length === 1 ? chosen[0].office : `${chosen.length} selected`;
   return (
     <div className="field-group ms" ref={ref}>
@@ -87,9 +88,9 @@ function MultiSelect({ id, label, options, selected, onToggle, disabled, placeho
       {open && (
         <div className="ms-pop" role="listbox" aria-multiselectable="true" aria-label={label}>
           {options.length === 0 ? <div className="ms-empty">{emptyText}</div> : options.map((o) => {
-            const on = selected.includes(o.office);
+            const on = selected.includes(placeKey(o));
             return (
-              <button type="button" key={o.office} role="option" aria-selected={on} className={`ms-opt ${on ? "on" : ""}`} onClick={() => { onToggle(o); if (single) setOpen(false); }}>
+              <button type="button" key={placeKey(o)} role="option" aria-selected={on} className={`ms-opt ${on ? "on" : ""}`} onClick={() => { onToggle(o); if (single) setOpen(false); }}>
                 <span className={`ms-check ${single ? "radio" : ""}`}>{on && <Check size={12} strokeWidth={3} />}</span>
                 <span>{o.office}</span>
               </button>
@@ -140,11 +141,12 @@ function VoCodes({ branch, codes, onAdd, onRemove, idPrefix, max = Infinity }) {
  */
 export function OfficeSelector({ tree, division, region, area, value, onChange, kinds = ["region", "area", "branch"], idPrefix = "ofc", single = false }) {
   const opts = officeOptions(tree, division, region, area);
+  const keys = value.map(placeKey);
   const names = value.map((p) => p.office);
   const toggle = (o) => {
-    if (names.includes(o.office)) {
+    if (keys.includes(placeKey(o))) {
       // removing a branch also removes the VOs under it
-      onChange(value.filter((p) => p.office !== o.office && !(o.officeKind === "branch" && p.officeKind === "vo" && p.branch === o.office)));
+      onChange(value.filter((p) => placeKey(p) !== placeKey(o) && !(o.officeKind === "branch" && p.officeKind === "vo" && p.branch === o.office)));
     } else onChange(single ? [o] : [...value, o]);
   };
   const branches = value.filter((p) => p.officeKind === "branch");
@@ -152,21 +154,21 @@ export function OfficeSelector({ tree, division, region, area, value, onChange, 
   const addVo = (b, code) => {
     const base = branches.find((p) => p.office === b) || {};
     const kept = single ? value.filter((p) => p.officeKind !== "vo") : value;
-    onChange([...kept, { division: base.division, region: base.region, area: base.area, office: voName(code, b), officeKind: "vo", branch: b }]);
+    onChange([...kept, { division: base.division, region: base.region, area: base.area, office: voName(code, b), officeKind: "vo", branch: b, ...(base.officeId ? { branchOfficeId: base.officeId } : {}) }]);
   };
   const removeVo = (b, code) => onChange(value.filter((p) => p.office !== voName(code, b)));
   // offices chosen earlier that aren't in today's lists (e.g. the visit's area was changed) stay visible and removable
-  const listed = new Set([...opts.region, ...opts.area, ...opts.branch].map((o) => o.office));
-  const stray = value.filter((p) => p.officeKind !== "vo" ? !listed.has(p.office) : !names.includes(voBranch(p.office)));
+  const listed = new Set([...opts.region, ...opts.area, ...opts.branch].map(placeKey));
+  const stray = value.filter((p) => p.officeKind !== "vo" ? !listed.has(placeKey(p)) : !names.includes(voBranch(p.office)));
 
   if (!area) return <p className="field-hint" style={{ margin: 0 }}>Select the visit's division, region and area first.</p>;
   const shown = kinds.filter((k) => ["region", "area", "branch"].includes(k));
   return (
     <div className="office-sel">
       <div className={`office-grid cols-${shown.length}`}>
-        {shown.includes("region") && <MultiSelect id={`${idPrefix}-ro`} label={KIND_TITLE.region} options={opts.region} selected={names} onToggle={toggle} placeholder={single ? "Select regional office" : "Select regional offices"} single={single} emptyText="No regional offices in this division." />}
-        {shown.includes("area") && <MultiSelect id={`${idPrefix}-ao`} label={KIND_TITLE.area} options={opts.area} selected={names} onToggle={toggle} placeholder={single ? "Select area office" : "Select area offices"} single={single} emptyText="No area offices in this region." />}
-        {shown.includes("branch") && <MultiSelect id={`${idPrefix}-bo`} label={KIND_TITLE.branch} options={opts.branch} selected={names} onToggle={toggle} placeholder={single ? "Select branch office" : "Select branch offices"} single={single} emptyText="No branch offices in this area." />}
+        {shown.includes("region") && <MultiSelect id={`${idPrefix}-ro`} label={KIND_TITLE.region} options={opts.region} selected={keys} onToggle={toggle} placeholder={single ? "Select regional office" : "Select regional offices"} single={single} emptyText="No regional offices in this division." />}
+        {shown.includes("area") && <MultiSelect id={`${idPrefix}-ao`} label={KIND_TITLE.area} options={opts.area} selected={keys} onToggle={toggle} placeholder={single ? "Select area office" : "Select area offices"} single={single} emptyText="No area offices in this region." />}
+        {shown.includes("branch") && <MultiSelect id={`${idPrefix}-bo`} label={KIND_TITLE.branch} options={opts.branch} selected={keys} onToggle={toggle} placeholder={single ? "Select branch office" : "Select branch offices"} single={single} emptyText="No branch offices in this area." />}
       </div>
       {branches.length > 0 && (
         <div className="vo-box">
@@ -176,7 +178,7 @@ export function OfficeSelector({ tree, division, region, area, value, onChange, 
       {value.length > 0 && (
         <div className="sel-chips" aria-label="Selected offices">
           {value.map((p) => (
-            <span key={p.office} className={`sel-chip ${p.officeKind}`}>
+            <span key={placeKey(p)} className={`sel-chip ${p.officeKind}`}>
               {p.officeKind === "vo" ? <Users size={12} /> : <Building2 size={12} />}
               {p.officeKind === "branch" ? shortName(p.office) : p.office}
               {stray.includes(p) && <em> · outside this area</em>}
@@ -203,7 +205,7 @@ export function RouteSummary({ visit: v, empty = "Location not set", showNone = 
       {(v.stops || []).length > 0 ? (
         <div className="rs-stops">
           {v.stops.map((s) => (
-            <span key={s.name} className={`rs-stop ${s.kind}`}>
+            <span key={s.officeId || s.name} className={`rs-stop ${s.kind}`}>
               <span className="rs-dot">{s.kind === "vo" ? <Users size={11} /> : <Building2 size={11} />}</span>
               {s.kind === "branch" ? shortName(s.name) : s.name}
             </span>

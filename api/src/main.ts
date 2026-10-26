@@ -6,6 +6,7 @@ import * as express from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import { AppModule } from './app.module';
 import { ErrorFilter } from './common/error.filter';
 
@@ -19,6 +20,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bodyParser: false });
   app.set('trust proxy', 1); // behind Nginx/IIS: trust X-Forwarded-Proto for secure cookies
   app.disable('x-powered-by');
+  app.use(compression()); // the office list alone is ~1.5 MB of JSON; gzip makes it a tenth of that
   app.use(cookieParser());
   app.use('/api/uploads', express.raw({ type: () => true, limit: '25mb' }));
   // large enough for a visit carrying several downscaled photos

@@ -41,15 +41,48 @@ export const STATUS_META = {
   never: { label: "Never visited", short: "Never", color: "var(--danger)", pill: "pill-never" },
 };
 
-export const officeKey = (o) => `${o.district}::${o.name}`;
+/** An office's key everywhere on screen: its id (older records without one: region + name). */
+export const officeKey = (o) => o.id || `${o.district}::${o.name}`;
+
+/* ---------- where an office is ----------
+   Locations come from BRAC's branch API. A branch sits in every Division › Region › Area its
+   programmes put it in (`placements`), so a visit to it counts in each of those places. Visits and
+   entries carry the office's id (`officeId`; a VO carries its branch's as `branchOfficeId`), and
+   the office list is looked up here, so a branch moved by the API takes its visits with it. */
+
+let directory = new Map();
+
+/** Call whenever the office lists load (the staff app, the admin console, the public summary). */
+export function setOfficeDirectory(offices, structure) {
+  const next = new Map();
+  (offices || []).forEach((o) => next.set(o.id, o));
+  (structure?.regionalOffices || []).forEach((o) => next.set(o.id, { ...o, placements: [{ division: o.division, region: o.region || "", area: "" }] }));
+  (structure?.areaOffices || []).forEach((o) => next.set(o.id, { ...o, placements: [{ division: o.division, region: o.region, area: o.area }] }));
+  directory = next;
+}
+export const officeById = (id) => (id ? directory.get(id) : undefined);
+
+/** Every Division › Region › Area a record counts in: its office's placements, or its own fields. */
+export function placementsOf(rec) {
+  if (!rec) return [];
+  if (rec.placements?.length) return rec.placements;
+  const o = officeById(rec.officeId || rec.place?.officeId || rec.branchOfficeId || rec.place?.branchOfficeId);
+  if (o?.placements?.length) return o.placements;
+  return [{ division: rec.division || "", region: rec.region ?? rec.district ?? "", area: rec.area || "" }];
+}
+
+const fits = (p, f) => (f.division === "All" || p.division === f.division) && (f.region === "All" || p.region === f.region) && (f.area === "All" || p.area === f.area);
+/** Is any of the record's places inside the filter's division / region / area? */
+export const inPlace = (rec, filter) => placementsOf(rec).some((p) => fits(p, filter));
+/** The values of one level ("division", "region", "area") a record counts under, within the filter. */
+export const placeValues = (rec, field, filter) =>
+  [...new Set(placementsOf(rec).filter((p) => fits(p, filter)).map((p) => p[field]).filter(Boolean))];
 
 /**
- * division → region → area → [branch names], for the visit form's dropdowns.
- * Regions and areas come from the admin's Locations list (`structure`, from /api/structure), so a
- * new region or area shows even before it has a branch; branches come from the active offices
- * (a branch's region is `o.district`, its older name). The tree also carries the active
- * Regional and Area Offices, as `tree.regionalOffices` / `tree.areaOffices` (not enumerable, so
- * Object.keys(tree) is still just the divisions).
+ * division → region → area → [{ id, name }] branches, for the visit form's dropdowns. A branch is
+ * listed under every area it sits in. Regions and areas come from /api/structure, so an area shows
+ * even before it has a branch. The tree also carries the active Regional and Area Offices, as
+ * `tree.regionalOffices` / `tree.areaOffices` (not enumerable, so Object.keys(tree) is still just the divisions).
  */
 export function buildLocationTree(offices, structure) {
   const tree = {};
@@ -62,9 +95,14 @@ export function buildLocationTree(offices, structure) {
   (structure?.regions || []).filter((r) => r.active !== false).forEach((r) => add(r.division, r.name));
   (structure?.areas || []).filter((a) => a.active !== false).forEach((a) => add(a.division, a.region, a.name));
   (offices || []).filter((o) => o.active !== false).forEach((o) => {
-    add(o.division, o.district, o.area);
-    if (o.area) tree[o.division][o.district][o.area].push(o.name);
+    placementsOf({ ...o, region: o.district }).forEach((p) => {
+      if (!p.area) return;
+      add(p.division, p.region, p.area);
+      const list = tree[p.division][p.region][p.area];
+      if (!list.some((b) => b.id === o.id)) list.push({ id: o.id, name: o.name });
+    });
   });
+  Object.values(tree).forEach((regions) => Object.values(regions).forEach((areas) => Object.values(areas).forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)))));
   Object.defineProperty(tree, "regionalOffices", { value: (structure?.regionalOffices || []).filter((o) => o.active !== false) });
   Object.defineProperty(tree, "areaOffices", { value: (structure?.areaOffices || []).filter((o) => o.active !== false) });
   return tree;
@@ -115,15 +153,18 @@ export function clientsHeard(v) {
 
 /** One row per active office, with its visit recency and health signals. */
 export function computeCoverage(offices, visits, targetDays = 90, now = new Date()) {
+  // records carry their office's id; older ones only a region and name
+  const byId = {};
   const byKey = {};
   const byName = {};
   (visits || []).forEach((v) => {
     if (!v.location || !v.date || v.steps?.register === false) return;
-    if (v.region) (byKey[`${v.region}::${v.location}`] = byKey[`${v.region}::${v.location}`] || []).push(v);
+    if (v.officeId) (byId[v.officeId] = byId[v.officeId] || []).push(v);
+    else if (v.region) (byKey[`${v.region}::${v.location}`] = byKey[`${v.region}::${v.location}`] || []).push(v);
     else (byName[v.location] = byName[v.location] || []).push(v);
   });
   return (offices || []).filter((o) => o.active !== false).map((o) => {
-    const vs = [...(byKey[officeKey(o)] || []), ...(byName[o.name] || [])].sort((a, b) => b.date.localeCompare(a.date));
+    const vs = [...(byId[o.id] || []), ...(byKey[`${o.district}::${o.name}`] || []), ...(byName[o.name] || [])].sort((a, b) => b.date.localeCompare(a.date));
     const last = vs[0];
     const daysSince = last ? Math.max(0, Math.floor((now - new Date(last.date)) / DAY_MS)) : null;
     const status = !last ? "never" : daysSince > targetDays ? "stale" : "ok";

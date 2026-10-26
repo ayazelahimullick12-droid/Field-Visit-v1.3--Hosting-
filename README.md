@@ -16,7 +16,8 @@ field-visit-tracker/
 │       ├── auth/                   sign-in, registration, who-may-call-what (access.ts)
 │       ├── people/                 employees and admin accounts
 │       ├── reference-data/         units/teams, settings, email log
-│       ├── structure/              Division → Region → Area → Branch, regional/area/branch offices
+│       ├── structure/              Division → Region → Area → Branch, regional/area/branch offices (read-only)
+│       ├── locations/              BRAC's branch API → the locations: sync, rules, build-locations.ts
 │       ├── visits/                 saving visits; visit-rules.ts = the rules
 │       ├── action-items/           assign / extend / start / fixed / long term / reminders,
 │       │                           story likes and comments; action-items.logic.ts = the rules
@@ -40,8 +41,9 @@ npm run setup
 1. `npm run dev:db` — a private PostgreSQL on port 5433 (leave it running).
 2. First time only, in `api/`: copy `.env.example` to `.env`, set
    `DATABASE_URL="postgresql://postgres:postgres@localhost:5433/fvt?schema=public"` and a `SEED_ADMIN_PASSWORD`, then
-   `npx prisma migrate deploy` and `npm run db:seed`
-   (or `npm run db:import -- path/to/db.json` to load the prototype's demo data).
+   `npx prisma migrate deploy` and `npm run db:seed`. For locations and demo data:
+   `npm run build`, `npm run db:locations -- path/to/branches.json` (a saved copy of the branch
+   API), then `npm run db:demo`.
 3. `npm run dev:api` — API on http://localhost:4000
 4. `npm run dev:web` — website on http://localhost:3000 (open this one while developing)
 
@@ -81,11 +83,10 @@ Works on Linux (recommended: Ubuntu 22.04/24.04) or Windows Server.
 7. Sign in at `/` → **Admin** with the seed admin PIN, then:
    - **Email settings**: enter the sending account (SMTP host, port, username, password,
      "send from" address) and **Send test**.
-   - **Locations & lists**: add the Regions (each in a Division), the Areas (each in a Region),
-     the Regional Offices (each in a Division), the Area Offices (each in a Region) and the
-     Purposes of visit.
-   - **Branch offices**: add the branches (each in an Area), one by one or by CSV
-     (columns `Branch, Area, Region, Division, Latitude, Longitude`).
+   - **Locations & lists → Sync now**: loads every location from BRAC's branch API
+     (`BRANCH_API_URL` and `BRANCH_API_TOKEN` in `.env`); it then refreshes every night at 2 a.m.
+     Check **Look-alike spellings**, and set the Purposes of visit.
+   - **Branch offices**: set the visit target.
    - **Units**, **Employees**: set up the real data. Staff can also create their own
      accounts with their work email.
 
@@ -94,9 +95,27 @@ and restart the service.
 
 ## Locations
 
-**Division → Region → Area → Branch.** Divisions are the 8 government divisions (fixed, in
-`api/src/structure/divisions.ts`). Regions and Areas are BRAC's own and are managed in
-**Admin → Locations & lists**. On the visit form, staff pick Division → Region → Area, then:
+**Division → Region → Area → Branch**, all from **BRAC's branch API** (`api/src/locations`).
+The API lists each branch once per programme (DABI, PROGOTI, BRAC F&A, ...), each programme with
+its own divisions, regions and areas. The app keeps them all in one tree:
+
+- Divisions, regions and areas are BRAC's own, known by name within their parent: every
+  "Sylhet-1" under "North East" is one region holding the areas of all programmes.
+- A branch is known by its BRAC branch ID and sits in **every** area its programmes put it in. A
+  visit to it counts in each of those places; totals count each visit and branch once.
+- Each region gets a Regional Office and each area an Area Office.
+- Left out: rows without a programme (old copies), test records, regional / market / head
+  offices and learning centres, and the HO, Enterprise and Rohingya-camp divisions.
+- The admin can merge two spellings of one place (**Look-alike spellings**) and list branch IDs
+  that two different offices share (the second becomes `<ID>.1`).
+
+The API's rows are kept as they arrive (table `ApiBranchRow`), and each sync rebuilds the
+locations from them. A download that doesn't add up to the API's own total, or is much smaller than
+the last one, is refused. Offices the API stops listing are switched off, never deleted; visits
+refer to offices by id, so they follow a branch the API moves. Without access to the API, load a
+saved copy: `npm run db:locations -- branches.json` (after `npm run build`).
+
+On the visit form, staff pick Division → Region → Area, then:
 
 | Picker | Shows |
 |---|---|
@@ -104,8 +123,8 @@ and restart the service.
 | Area Office | the Area Offices of the chosen Region |
 | Branch Office | the branches of the chosen Area |
 
-Renaming or moving a Region or Area also updates its offices and past visits. A Region or Area
-that still has offices can't be deleted; switch it off instead (it disappears from the visit form).
+The coverage maps are switched off (`maps` in `web/src/lib/features.js`): BRAC's divisions and
+regions have no map outlines and the API has no coordinates.
 
 ## How emails work
 

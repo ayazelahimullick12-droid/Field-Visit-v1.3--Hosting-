@@ -598,6 +598,12 @@ table.ctable{ width:100%; border-collapse:separate; border-spacing:0; }
 .mf-label{ font-size:11.5px; font-weight:700; color:var(--ink-soft); }
 .map-filters .select,.map-filters .input{ width:100%; min-width:0; font-size:13px; min-height:42px; padding:9px 34px 9px 14px; border-radius:14px; }
 .map-filters .input{ padding-right:14px; }
+/* maps switched off: the filters alone, side by side */
+.map-filters-row{ display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:12px; }
+.map-filters-row .mf-head{ grid-column:1/-1; }
+/* Branch 360°: every Division › Region › Area a branch is listed in */
+.place-list{ list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:6px; }
+.place-list li{ font-size:13px; font-weight:600; padding:9px 12px; border-radius:12px; background:var(--brand-wash); color:var(--ink); }
 .map-stage{ min-width:0; }
 .map-stage .map-wrap{ width:min(100%, max(340px, calc(100vh - 330px))); margin:0 auto; }
 .cov-grid{ display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:16px; align-items:start; }

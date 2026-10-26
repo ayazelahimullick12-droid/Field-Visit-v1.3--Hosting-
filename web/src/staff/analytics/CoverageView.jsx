@@ -3,7 +3,7 @@ import { Target, CheckCircle2, Clock, EyeOff, Hourglass, Download, Search, Chevr
 import InteractiveMap from "../../lib/InteractiveMap";
 import { StackedBarChart } from "../../lib/charts";
 import { downloadCsv, Reveal } from "../../lib/ui";
-import { coverageSummary, timeAgo, STATUS_META, toShapeName } from "../../lib/offices";
+import { coverageSummary, timeAgo, STATUS_META, toShapeName, placeValues } from "../../lib/offices";
 import { Kpi, MapPanel, LocationFilterBar, EMPTY_LOCATION_FILTER, matchesLocation, drillFieldFor, DRILL_LABELS } from "./common";
 import bdDivisions from "../../lib/bd-divisions.geojson.json";
 import bdDistricts from "../../lib/bd-districts.geojson.json";
@@ -42,12 +42,15 @@ export default function CoverageView({ coverage, offices, visits, target, loc, s
     if (!field) return [];
     const m = {};
     rows.forEach((r) => {
-      const k = r[field] || "Unspecified";
-      (m[k] = m[k] || { label: k, ok: 0, stale: 0, never: 0, total: 0 })[r.status]++;
-      m[k].total++;
+      // a branch in two areas counts in both
+      const keys = field === "location" ? [r.location] : placeValues(r, field, loc);
+      (keys.length ? keys : ["Unspecified"]).forEach((k) => {
+        (m[k] = m[k] || { label: k, ok: 0, stale: 0, never: 0, total: 0 })[r.status]++;
+        m[k].total++;
+      });
     });
     return Object.values(m).sort((a, b) => a.ok / a.total - b.ok / b.total || b.total - a.total);
-  }, [rows, field]);
+  }, [rows, field, loc]);
 
   const counts = { all: rows.length, never: sum.never, stale: sum.stale, ok: sum.ok };
   const tableRows = useMemo(() => {

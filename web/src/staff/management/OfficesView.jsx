@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Search, Download, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { downloadCsv } from "../../lib/ui";
-import { timeAgo, DAY_MS, STATUS_META, coverageSummary } from "../../lib/offices";
+import { timeAgo, DAY_MS, STATUS_META, coverageSummary, inPlace } from "../../lib/offices";
 import { plural } from "../../lib/visits";
 import { EMPTY_LOCATION_FILTER } from "../analytics/common";
 import CoverageView from "../analytics/CoverageView";
@@ -20,11 +20,9 @@ const SORTS = {
 };
 const daysSince = (d) => (d ? Math.max(0, Math.floor((Date.now() - new Date(d)) / DAY_MS)) : null);
 
-// A VO / area / region office isn't on the master list, so it only matches a location filter by what was recorded with it.
+// An office matches by where it is (a branch in every area it is listed in; a VO by its branch).
 function matchLoc(r, f) {
-  if (f.division !== "All" && r.division !== f.division) return false;
-  if (f.region !== "All" && r.region !== f.region) return false;
-  if (f.area !== "All" && r.area !== f.area) return false;
+  if (!inPlace(r, f)) return false;
   if (f.branch !== "All" && r.name !== f.branch && r.parent !== f.branch) return false;
   return true;
 }

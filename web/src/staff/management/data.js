@@ -24,7 +24,8 @@ export function daysToResolve(c) {
 
 /* ------------------------------------ offices ------------------------------------ */
 
-const recKey = (r) => (r.officeKind === "branch" && r.region ? `${r.region}::${r.location}` : `${r.officeKind}::${r.location}`);
+// an office's row: its id (older records without one: region + name for a branch, kind + name otherwise)
+const recKey = (r) => r.officeId || (r.officeKind === "branch" && r.region ? `${r.region}::${r.location}` : `${r.officeKind}::${r.location}`);
 
 /**
  * One row per office of every kind — branches from the master list (so never-visited
@@ -38,7 +39,7 @@ export function officeRows(records, offices, range) {
     return rows.get(key);
   };
   (offices || []).filter((o) => o.active !== false).forEach((o) => ensure(officeKey(o), {
-    name: o.name, kind: "branch", division: o.division, region: o.district, area: o.area, parent: o.area, office: o,
+    name: o.name, kind: "branch", division: o.division, region: o.district, area: o.area, parent: o.area, office: o, placements: o.placements,
   }));
 
   (records || []).forEach((r) => {
@@ -46,7 +47,7 @@ export function officeRows(records, offices, range) {
     let row = rows.get(recKey(r)) || (kind === "branch" ? [...rows.values()].find((x) => x.kind === "branch" && x.name === r.location) : null);
     if (!row) {
       row = ensure(recKey(r), {
-        name: r.location, kind, division: r.division, region: r.region, area: r.area,
+        name: r.location, kind, division: r.division, region: r.region, area: r.area, officeId: r.officeId, branchOfficeId: r.branchOfficeId,
         parent: kind === "vo" ? r.branch || voBranch(r.location) : kind === "branch" ? r.area : kind === "area" ? r.region : r.division,
       });
     }
@@ -119,7 +120,7 @@ export function personStats(person, trips, records, range) {
 export function placesOf(person, records, range) {
   const m = new Map();
   records.filter((r) => r.employeeId === person.id && inPeriod(r.date, range)).forEach((r) => {
-    const k = `${r.officeKind}::${r.region || ""}::${r.location}`;
+    const k = r.officeId || `${r.officeKind}::${r.region || ""}::${r.location}`;
     const row = m.get(k) || { key: k, name: r.location, kind: r.officeKind || "branch", where: [r.area, r.region].filter(Boolean).join(" · "), count: 0, last: "", entries: emptyEntryCounts() };
     row.count += 1;
     if ((r.date || "") > row.last) row.last = r.date;

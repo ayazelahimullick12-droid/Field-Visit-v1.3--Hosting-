@@ -20,9 +20,6 @@ export class ActionItemsController {
   @AdminOnly() @Post('run-deadline-check') @HttpCode(200)
   check() { return this.items.runDeadlineCheck(); }
 
-  @AdminOnly() @Post('relink-office') @HttpCode(200)
-  relink(@Body() body: any) { return this.items.relinkOffice(body?.existing, body?.form); }
-
   // fixers
   @StaffOnly() @Post('start-complaint') @HttpCode(200)
   start(@CurrentUser() u: SessionUser, @Body() body: any) { return this.items.start(u, body || {}); }

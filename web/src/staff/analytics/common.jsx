@@ -1,5 +1,7 @@
 import React, { useMemo } from "react";
 import { CountUp, Sparkline, DeltaChip } from "../../lib/ui";
+import { inPlace, placementsOf } from "../../lib/offices";
+import { FEATURES } from "../../lib/features";
 
 export const SERIES_COLORS = [
   "var(--series-1)", "var(--series-2)", "var(--series-3)",
@@ -27,11 +29,10 @@ export function matchesDate(dateStr, filter) {
   return true;
 }
 
-// Works on any record carrying division / region (district) / area / location (branch).
+// Works on any record with an office (officeId / placements) or its own division / region / area,
+// and a location (branch name). A branch in several areas matches in each of them.
 export function matchesLocation(record, filter) {
-  if (filter.division !== "All" && record.division !== filter.division) return false;
-  if (filter.region !== "All" && record.region !== filter.region) return false;
-  if (filter.area !== "All" && record.area !== filter.area) return false;
+  if (!inPlace(record, filter)) return false;
   if (filter.branch !== "All" && record.location !== filter.branch) return false;
   return true;
 }
@@ -51,22 +52,24 @@ export const DRILL_LABELS = { division: "Division", region: "Region", area: "Are
 // Options come from the master office list, so offices that have never been
 // visited can still be picked and inspected.
 export function LocationFilterBar({ offices, value, onChange, labelled = false }) {
-  const divisions = useMemo(() => [...new Set(offices.map((o) => o.division).filter(Boolean))].sort(), [offices]);
+  // every place a branch sits in (a branch can be in several areas)
+  const places = useMemo(() => offices.flatMap((o) => placementsOf({ ...o, region: o.district }).map((p) => ({ ...p, name: o.name }))), [offices]);
+  const divisions = useMemo(() => [...new Set(places.map((p) => p.division).filter(Boolean))].sort(), [places]);
   const districts = useMemo(
-    () => [...new Set(offices.filter((o) => value.division === "All" || o.division === value.division).map((o) => o.district).filter(Boolean))].sort(),
-    [offices, value.division]
+    () => [...new Set(places.filter((p) => value.division === "All" || p.division === value.division).map((p) => p.region).filter(Boolean))].sort(),
+    [places, value.division]
   );
   const areas = useMemo(
-    () => [...new Set(offices.filter((o) => (value.division === "All" || o.division === value.division) && (value.region === "All" || o.district === value.region)).map((o) => o.area).filter(Boolean))].sort(),
-    [offices, value.division, value.region]
+    () => [...new Set(places.filter((p) => (value.division === "All" || p.division === value.division) && (value.region === "All" || p.region === value.region)).map((p) => p.area).filter(Boolean))].sort(),
+    [places, value.division, value.region]
   );
   const branches = useMemo(
-    () => [...new Set(offices.filter((o) =>
-      (value.division === "All" || o.division === value.division) &&
-      (value.region === "All" || o.district === value.region) &&
-      (value.area === "All" || o.area === value.area)
-    ).map((o) => o.name).filter(Boolean))].sort(),
-    [offices, value.division, value.region, value.area]
+    () => [...new Set(places.filter((p) =>
+      (value.division === "All" || p.division === value.division) &&
+      (value.region === "All" || p.region === value.region) &&
+      (value.area === "All" || p.area === value.area)
+    ).map((p) => p.name).filter(Boolean))].sort(),
+    [places, value.division, value.region, value.area]
   );
 
   // `labelled` stacks each select under a visible caption (used in the map panel's filter column)
@@ -109,6 +112,20 @@ export function LocationFilterBar({ offices, value, onChange, labelled = false }
 /** A map with its filters right beside it (stacked above it on small screens), so changing a
     filter and watching the map zoom happen on the same screen. */
 export function MapPanel({ title, sub, filters, canClear, onClear, children }) {
+  // maps switched off (lib/features.js): just the filters, in a row
+  if (!FEATURES.maps) {
+    return (
+      <div className="card card-pad map-panel" style={{ minWidth: 0 }}>
+        <div className="map-filters map-filters-row">
+          <div className="mf-head">
+            <span>Choose a place</span>
+            {canClear && <button className="mf-clear" onClick={onClear}>Clear</button>}
+          </div>
+          {filters}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="card card-pad map-panel" style={{ minWidth: 0 }}>
       <p className="analytics-card-title">{title}</p>

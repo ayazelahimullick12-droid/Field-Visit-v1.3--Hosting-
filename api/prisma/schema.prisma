@@ -61,16 +61,19 @@ model Unit {
 }
 
 // ---- Where things are: Division → Region → Area → Branch ----
-// Divisions are the 8 government divisions (fixed, see api/src/structure/divisions.ts).
-// Regions and Areas are BRAC's own and are maintained by the admin.
+// All of it comes from BRAC's branch API (api/src/locations): the API's rows are kept as they
+// arrive in ApiBranchRow, and each sync rebuilds Region, Area and Office from them. Divisions,
+// regions and areas are BRAC's own (all programmes together, merged by name); nobody edits them here.
 
 model Region {
   id        String  @id
-  name      String  @unique
-  division  String // e.g. "Dhaka Division"
+  name      String
+  division  String // e.g. "North East"
   active    Boolean @default(true)
   sortOrder Int     @default(0)
   areas     Area[]
+
+  @@unique([division, name])
 }
 
 model Area {
@@ -85,21 +88,54 @@ model Area {
 }
 
 // Every office, by type:
-//   "region" = Regional Office: placed in a Division
-//   "area"   = Area Office:     placed in a Region (and so its Division)
-//   "branch" = Branch Office:   placed in an Area (and so its Region and Division)
-// The place is stored by name, as visits store it.
+//   "region" = Regional Office: one per region (placed in a Division)
+//   "area"   = Area Office:     one per area (placed in a Region, and so its Division)
+//   "branch" = Branch Office:   one per BRAC branch ID, placed in every Area its programmes put it in
+// division / region / area hold the first placement; `placements` holds all of them
+// ([{ division, region, area, programmes }]). Visits refer to offices by id.
+// An office the API no longer lists is switched off (active = false), never deleted.
 model Office {
-  id        String  @id
-  name      String
-  type      String  @default("branch")
-  division  String?
-  region    String?
-  area      String?
-  lat       Float?
-  lng       Float?
-  active    Boolean @default(true)
-  sortOrder Int     @default(0)
+  id         String  @id
+  name       String
+  type       String  @default("branch")
+  code       String? // a branch's BRAC branch ID ("2853", or "2853.1" for the second office sharing it)
+  division   String?
+  region     String?
+  area       String?
+  placements Json?
+  lat        Float?
+  lng        Float?
+  active     Boolean @default(true)
+  sortOrder  Int     @default(0)
+}
+
+// One row of BRAC's branch API, exactly as it arrived. A branch is listed once per programme,
+// so the key is "<programme>:<branch_id>" ("none:<br_id>" for the rows without a programme).
+// `present` is false once a sync no longer finds the row.
+model ApiBranchRow {
+  key         String   @id
+  branchId    String
+  programName String?
+  data        Json
+  hash        String
+  present     Boolean  @default(true)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@index([branchId])
+}
+
+// Each time the locations were synced or rebuilt, and what came of it.
+model LocationSync {
+  id         String    @id
+  trigger    String // "nightly" | "manual" | "file" | "rules"
+  status     String    @default("running") // "running" | "ok" | "failed" | "refused"
+  message    String?
+  report     Json?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([startedAt])
 }
 
 model Visit {

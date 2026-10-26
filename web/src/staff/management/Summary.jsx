@@ -4,8 +4,8 @@ import {
   Users, Image as ImageIcon, Heart, MessageCircle, Share2, ArrowUpRight, ArrowDownRight, Minus,
 } from "lucide-react";
 import { LocationFilterBar, EMPTY_LOCATION_FILTER, matchesLocation } from "../analytics/common";
-import { computeCoverage, average, DAY_MS } from "../../lib/offices";
-import { submittedComplaints, entriesOf, entryPlaces, isDraft, plural, reasonText, phaseOf } from "../../lib/visits";
+import { computeCoverage, average, DAY_MS, inPlace, placeValues } from "../../lib/offices";
+import { submittedComplaints, entriesOf, entryPlaces, isDraft, plural, reasonText, phaseOf, placeOfStop } from "../../lib/visits";
 import { statusOf, isFixed, isAssigned } from "../../lib/complaints";
 import { PERIODS, periodRange } from "./periods";
 import { daysToResolve } from "./data";
@@ -55,9 +55,15 @@ function periodWords(f) {
 }
 function countBy(list, keyFn) {
   const m = new Map();
-  list.forEach((x) => { const k = keyFn(x); m.set(k, (m.get(k) || 0) + 1); });
+  list.forEach((x) => { const k = keyFn(x); [].concat(k).forEach((one) => m.set(one, (m.get(one) || 0) + 1)); });
   return [...m.entries()].sort((a, b) => b[1] - a[1]);
 }
+/** Every office a visit planned or recorded something at (its places, for "is this visit here?"). */
+const visitPlaces = (v) => [
+  ...(v.stops || []).map((st) => placeOfStop(st, v)),
+  ...entriesOf(v).filter((e) => !isDraft(e)).flatMap(entryPlaces),
+];
+const ANYWHERE = { division: "All", region: "All", area: "All" };
 const officeOf = (e) => entryPlaces(e)[0]?.office || "";
 /** "less than a day", "1 day", "3.5 days" */
 const daysText = (d) => (d < 1 ? "less than a day" : d < 1.05 ? "1 day" : `${one(d)} days`);
@@ -70,10 +76,10 @@ export function figures({ trips, records, offices, settings, f, employees = [], 
   const target = settings?.visitTargetDays || 90;
 
   // --- visits in the chosen place ---
+  // a visit is "here" if any of its offices is (a branch counts in every area it is listed in)
   const visitInPlace = (v) => {
-    if (loc.division !== "All" && v.division !== loc.division) return false;
-    if (loc.region !== "All" && v.region !== loc.region) return false;
-    if (loc.area !== "All" && v.area !== loc.area) return false;
+    const places = visitPlaces(v);
+    if (!(places.length ? places.some((p) => inPlace(p, loc)) : inPlace(v, loc))) return false;
     if (loc.branch !== "All" && !(v.stops || []).some((s) => s.name === loc.branch)
       && !entriesOf(v).some((e) => entryPlaces(e).some((p) => p.office === loc.branch || p.branch === loc.branch))) return false;
     return true;
@@ -87,7 +93,7 @@ export function figures({ trips, records, offices, settings, f, employees = [], 
   const recordsNow = recordsHere.filter((x) => inRange(x.date, r.from, r.to));
 
   // --- branches visited in the period ---
-  const branches = offices.filter((o) => o.active !== false && matchesLocation({ division: o.division, region: o.district, area: o.area, location: o.name }, loc));
+  const branches = offices.filter((o) => o.active !== false && matchesLocation({ ...o, region: o.district, location: o.name }, loc));
   const visitedInPeriod = computeCoverage(branches, recordsNow, target).filter((b) => b.visitCount > 0).length;
 
   // --- upcoming: registered for a date after today (not limited by the time filter) ---
@@ -112,8 +118,11 @@ export function figures({ trips, records, offices, settings, f, employees = [], 
   // --- why, and when in the day ---
   const reasons = countBy(visits, (v) => reasonText(v) || "Not given");
   const shownReasons = reasons.slice(0, 4);
-  // visits per division ("Dhaka Division" shown as "Dhaka")
-  const divisions = countBy(visits, (v) => (v.division || "Not set").replace(/ Division$/, ""));
+  // visits per division: a visit counts once in each division its offices are in
+  const divisions = countBy(visits, (v) => {
+    const ds = [...new Set(visitPlaces(v).flatMap((p) => placeValues(p, "division", ANYWHERE)))];
+    return ds.length ? ds : [v.division || "Not set"];
+  });
   const otherReasons = reasons.slice(4).reduce((s, [, n]) => s + n, 0);
   // --- problems (action items) raised in the period; their status is as of today ---
   const items = submittedComplaints(trips).filter((c) => matchesLocation(c, loc));

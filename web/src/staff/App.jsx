@@ -14,7 +14,7 @@ import { PersonDetails } from "../lib/PersonInfo";
 import { FEATURES } from "../lib/features";
 import BdOutline from "../lib/BdOutline";
 import { CountUp, Reveal, Sparkline, DeltaChip } from "../lib/ui";
-import { buildLocationTree, computeCoverage, monthBuckets, monthKeyOf, DEFAULT_SETTINGS, STATUS_META } from "../lib/offices";
+import { buildLocationTree, computeCoverage, monthBuckets, monthKeyOf, DEFAULT_SETTINGS, STATUS_META, setOfficeDirectory } from "../lib/offices";
 import { purposesOf, expandVisits, submittedComplaints, phaseOf, PHASES, tripTitle, isoDate, plural, shortName, isDraft, countsOf, placeOffice, inFixerQueue } from "../lib/visits";
 import Management, { visibleMgmtTabs, EMPTY_MGMT_VIEW } from "./management/Management";
 import { managementTabOn } from "../lib/features";
@@ -105,11 +105,13 @@ export default function App() {
   const isFixer = roles.includes("fixer");
   // Network health / coverage is admin-only unless the feature switch (src/lib/features.js) says otherwise
   const seesNetwork = isManagement && FEATURES.managementSeesNetworkCoverage;
+  // where every office is (a branch can sit in several areas): read by the filters and figures
+  const directory = useMemo(() => { setOfficeDirectory(offices, structure); return {}; }, [offices, structure]);
   const tree = useMemo(() => buildLocationTree(offices, structure), [offices, structure]);
   const target = settings?.visitTargetDays || DEFAULT_SETTINGS.visitTargetDays;
   const questions = settings?.clientRatingQuestions || [];
   // the analytics, coverage and Branch 360° read one record per office of each visit (submitted entries only)
-  const reportVisits = useMemo(() => expandVisits(visits), [visits]);
+  const reportVisits = useMemo(() => expandVisits(visits), [visits, directory]); // eslint-disable-line react-hooks/exhaustive-deps
   const coverage = useMemo(() => (isManagement ? computeCoverage(offices, reportVisits, target) : []), [isManagement, offices, reportVisits, target]);
 
   if (!employeesLoaded || !currentEmployee || !store.loaded) {

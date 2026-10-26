@@ -64,6 +64,8 @@ stays on your PC.
    | `SEED_ADMIN_PIN` | the first admin's PIN, e.g. `9001` |
    | `SEED_ADMIN_PASSWORD` | a strong password |
    | `UPLOAD_DIR` | `/data/uploads` |
+   | `BRANCH_API_URL` | BRAC's branch API address (the list of all branches), from BRAC IT |
+   | `BRANCH_API_TOKEN` | the API's access token, from BRAC IT; keep it secret |
 
    (`APP_URL` comes in step 6, once you have the address.)
 4. Railway shows a banner with **Deploy** / **Apply changes** — don't click it yet; do step 5
@@ -109,13 +111,49 @@ permanent disk (a "volume"). Photos are stored in the database and don't need th
    step 4.
 2. **Email settings**: enter the sending account (full email address as the username; an app
    password for Gmail / Microsoft 365) → **Save settings** → **Send test**.
-3. **Locations & lists**: add Regions, Areas, Regional and Area Offices, Purposes of visit.
-4. **Branch offices**: add branches (one by one or **Import CSV**).
+3. **Locations & lists → Sync**: press **Sync now**. Divisions, regions, areas, regional, area and
+   branch offices all come from BRAC's branch API (all programmes) and refresh every night at 2 a.m.;
+   they can't be edited by hand. Then check **Look-alike spellings** (merge the ones that are one
+   place) and set the **Purposes of visit**. If the sync can't reach the API, see "If something
+   goes wrong".
+4. **Branch offices**: set the visit target (days).
 5. **Units**: add units and teams. **Employees**: add staff (or let them create their own
    accounts on the sign-in page).
 6. Check the staff side: sign in as a staff member and register a test visit.
 7. Voice-note check: add an entry with a voice note, then in Railway **Deployments → ⋮ →
    Redeploy**; the voice note must still play afterwards.
+
+## Demo data (optional)
+
+For showing the app, `npm run db:demo` fills the database from your PC with about six months of
+made-up visits to the real offices: client interactions, observations, action items at every
+stage, stories, and the emails they would have sent (logged only). It also adds units and teams,
+31 demo staff (PINs 51001–51031, emails at example.com), four client rating questions, and turns
+the management tabs on. The locations must be loaded first (**Sync now**, step 8).
+
+1. On the Postgres box open **Settings → Networking** and add public access for a few minutes;
+   then copy `DATABASE_PUBLIC_URL` from its **Variables** (the eye icon shows the real value).
+2. In PowerShell, from the `api` folder (add `?sslmode=disable` to the end of the address if
+   it is refused: Railway's database uses its own certificate):
+
+   ```powershell
+   $env:DATABASE_URL = "<the DATABASE_PUBLIC_URL you copied>"
+   $env:DEMO_PASSWORD = "<a password for all demo staff>"
+   npm run db:demo
+   Remove-Item Env:DATABASE_URL, Env:DEMO_PASSWORD
+   ```
+
+   The first line it prints names the database it writes to; check it is Railway's. It ends
+   with the list of PINs. Running it again replaces the demo staff and visits (with dates up
+   to that day).
+3. Before real use, take the demo out (same first line, then):
+   `npm run db:demo -- --remove`. This removes the demo staff, their visits and logged emails.
+   Units and settings stay. Then remove the database's public access again.
+
+If the server can't reach the branch API, the locations can be loaded from a saved copy of it
+the same way: `npm run build` once, then `npm run db:locations -- path	oranches.json`.
+To start completely fresh (every visit, and offices from before the API), use
+`npm run db:locations -- --remove-old`, then load the locations again.
 
 ---
 
@@ -143,6 +181,10 @@ connection URL to use with `pg_dump`).
 | Site opens but sign-in doesn't stick | Open the site with `https://` (the address Railway gave you). |
 | Voice notes vanish after a deploy | Check the volume is attached at `/data/uploads` and `UPLOAD_DIR` is `/data/uploads`. |
 | "Application failed to respond" | Look at Deploy Logs for the first red line; most often a missing variable. |
+| Locations → Sync: "not set up yet" | Add `BRANCH_API_URL` and `BRANCH_API_TOKEN` to the app's variables and redeploy. |
+| Locations → Sync: failed, "answered 401/403" | The token is wrong or expired: get a new one from BRAC IT. |
+| Locations → Sync: failed, timeout or "fetch failed" | The API may only accept BRAC's own network. Ask BRAC IT to allow Railway, or load the locations from a saved copy (see "Demo data"). |
+| Locations → Sync: refused | The download was incomplete or much smaller than last time, so nothing was changed. Try again later; if branches really closed in large numbers, the limit is `MAX_DROP` in `api/src/locations/locations.service.ts`. |
 | Forgot the admin password | Another admin can set a new one in **Employees → Admin accounts**, so add a second admin early. (Changing `SEED_ADMIN_PASSWORD` later does nothing: it's only used while there is no admin.) |
 
 ## Settings reference
@@ -154,5 +196,6 @@ connection URL to use with `pg_dump`).
 | `NODE_ENV` | yes | `production` |
 | `SEED_ADMIN_NAME`, `SEED_ADMIN_PIN`, `SEED_ADMIN_PASSWORD` | first start | the first admin, created only if there is no admin yet |
 | `UPLOAD_DIR` | yes | `/data/uploads`, where the volume is mounted |
+| `BRANCH_API_URL`, `BRANCH_API_TOKEN` | yes | BRAC's branch API and its token: the source of every location (nightly sync and **Sync now**) |
 | `APP_URL` | recommended | the site's address, used in emails |
 | `PORT` | no | set by Railway itself |

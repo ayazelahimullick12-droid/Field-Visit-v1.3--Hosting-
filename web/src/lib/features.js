@@ -5,6 +5,10 @@ export const FEATURES = {
   // This switch adds it to management's Analytics visits map (the Coverage colouring) and to the
   // branch status shown in quick search.
   managementSeesNetworkCoverage: true,
+  // The Bangladesh maps (coverage map, visit density, Branch 360° locator). Off while locations come
+  // from BRAC's branch API: its divisions and regions are BRAC's own, with no map outlines or
+  // coordinates. The filters beside the maps stay. (The sign-in page's outline is decoration and stays.)
+  maps: false,
 };
 
 // The Management section's tabs. Summary is always shown; an admin switches each of the others on

@@ -168,8 +168,12 @@ export function placeOfStop(s, v) {
   return {
     division: s.division || v?.division || "", region: s.region || v?.region || "", area: s.area || v?.area || "",
     office: s.name, officeKind: kind, branch: kind === "vo" ? voBranch(s.name) : kind === "branch" ? s.name : "",
+    ...(s.officeId ? { officeId: s.officeId } : {}), ...(s.branchOfficeId ? { branchOfficeId: s.branchOfficeId } : {}),
   };
 }
+
+/** The same office, whatever it is called on this visit: its id, or (older visits) its name. */
+export const placeKey = (p) => p.officeId || p.office;
 
 /* ---------- for the analytics, coverage map and Branch 360° ---------- */
 
@@ -183,22 +187,24 @@ export function expandVisits(trips) {
       return groups.get(key);
     };
     if (v.status === "done") {
-      (v.stops || []).forEach((s) => { const p = placeOfStop(s, v); group(s.name, p); });
+      (v.stops || []).forEach((s) => { const p = placeOfStop(s, v); group(placeKey(p), p); });
     }
     ENTRY_ORDER.forEach((t) => (v[ENTRY_TYPES[t].list] || []).forEach((e) => {
       if (isDraft(e)) return;
       // an entry about several offices counts at each of them
       entryPlaces(e).forEach((p) => {
-        if (p.office) group(p.office, { ...p })[ENTRY_TYPES[t].list].push(e);
+        if (p.office) group(placeKey(p), { ...p })[ENTRY_TYPES[t].list].push(e);
       });
     }));
     let i = 0;
-    groups.forEach((g, key) => {
+    groups.forEach((g) => {
       i += 1;
+      const key = g.office;
       out.push({
         id: groups.size > 1 ? `${v.id}-${i}` : v.id,
         tripId: v.id,
         employeeId: v.employeeId, employeeName: v.employeeName,
+        officeId: g.officeId || null, branchOfficeId: g.branchOfficeId || null,
         location: key, locationType: g.officeKind === "area" || g.officeKind === "region" ? "office" : "branch",
         officeKind: g.officeKind || officeKindOf(key), branch: g.branch || "",
         division: g.division || v.division, region: g.region || v.region, area: g.area || v.area,
@@ -223,6 +229,7 @@ export function submittedComplaints(trips) {
       out.push({
         ...c,
         visitId: v.id,
+        officeId: p.officeId || null, branchOfficeId: p.branchOfficeId || null,
         location: placeOffice(c),
         visitDate: v.date,
         visitReason: reasonText(v),
@@ -234,33 +241,6 @@ export function submittedComplaints(trips) {
     });
   });
   return out;
-}
-
-/* ---------- office renames (admin console → Offices) ---------- */
-
-const sameOffice = (name, region, office) => name === office.name && (region || "") === (office.district || office.region || "");
-
-/** How many visits planned or recorded something at this office. */
-export const visitsAtOffice = (trips, office) => (trips || []).filter((v) =>
-  (v.stops || []).some((s) => sameOffice(s.name, s.region, office)) ||
-  entriesOf(v).some((e) => entryPlaces(e).some((p) => sameOffice(p.office, p.region, office)))).length;
-
-/** Moves past visits along when an office is renamed or moved to another area / district. */
-export function relinkOffice(trips, existing, form) {
-  const movePlace = (p) => (p && sameOffice(p.office, p.region, existing)
-    ? { ...p, office: form.name, branch: p.officeKind === "branch" ? form.name : p.branch, region: form.district, area: form.area, division: form.division }
-    : p && p.branch === existing.name ? { ...p, branch: form.name } : p);
-  return (trips || []).map((v) => {
-    const next = {
-      ...v,
-      stops: (v.stops || []).map((s) => (sameOffice(s.name, s.region, existing) ? { ...s, name: form.name, region: form.district, area: form.area, division: form.division } : s)),
-    };
-    ENTRY_ORDER.forEach((t) => {
-      const k = ENTRY_TYPES[t].list;
-      next[k] = (v[k] || []).map((e) => ({ ...e, place: movePlace(e.place), ...(e.places ? { places: e.places.map(movePlace) } : {}), ...(e.branch === existing.name ? { branch: form.name } : {}) }));
-    });
-    return next;
-  });
 }
 
 /* ---------- fixers ---------- */

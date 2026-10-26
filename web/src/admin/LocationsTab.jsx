@@ -1,41 +1,65 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Edit3, Trash2, Power, Check, X, MapPin, Building2, Map as MapIcon, ListChecks } from "lucide-react";
-import { makeId } from "../lib/ids";
+import { Plus, Trash2, RefreshCw, Map as MapIcon, MapPin, ListChecks, GitMerge, Copy, CloudDownload, Undo2, X } from "lucide-react";
+import { api } from "../lib/session";
 import { DEFAULT_PURPOSES } from "../lib/visits";
 
 /* Admin console → Locations & lists.
-   Division → Region → Area → Branch:
-     - Divisions are the 8 government divisions (fixed).
-     - Regions (each in a Division) and Areas (each in a Region) are BRAC's own, managed here.
-     - Regional Offices (placed in a Division) and Area Offices (placed in a Region) are managed here.
-     - Branch Offices are on the Offices tab (each placed in an Area).
-   Also the "Purpose of visit" choices on the visit form.
-   Everything here is saved with one PUT /api/structure (or /api/settings for purposes). */
+   Division → Region → Area → Branch all come from BRAC's branch API: the server downloads it every
+   night (and on "Sync now") and rebuilds the lists, all programmes together. Nothing here edits a
+   location by hand. The admin can:
+     - merge two spellings of one region or area (look-alike spellings), or say they are different;
+     - list the branch IDs that two different offices share (the second shows as "<ID>.1");
+     - see what each sync did, and what it left out.
+   Also the "Purpose of visit" choices on the visit form. */
 
 const SECTIONS = [
+  { key: "sync", label: "Sync", icon: CloudDownload },
+  { key: "spellings", label: "Look-alike spellings", icon: GitMerge },
+  { key: "shared", label: "Shared branch IDs", icon: Copy },
   { key: "regions", label: "Regions", icon: MapIcon },
   { key: "areas", label: "Areas", icon: MapPin },
-  { key: "regionalOffices", label: "Regional Offices", icon: Building2 },
-  { key: "areaOffices", label: "Area Offices", icon: Building2 },
   { key: "purposes", label: "Purposes of visit", icon: ListChecks },
 ];
 
-export default function LocationsTab({ structure, onSaveStructure, offices, settings, setSettings, showToast }) {
-  const [section, setSection] = useState("regions");
+const when = (iso) => (iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—");
+const STATUS_PILL = { ok: "pill-ok", running: "pill-info", refused: "pill-stale", failed: "pill-never" };
+const TRIGGER = { nightly: "Nightly", manual: "Sync now", file: "From a file", rules: "After a rule change" };
+
+export default function LocationsTab({ structure, offices, onLocationsChanged, settings, setSettings, showToast }) {
+  const [section, setSection] = useState("sync");
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
   const s = { divisions: [], regions: [], areas: [], regionalOffices: [], areaOffices: [], ...(structure || {}) };
 
-  /** Saves the four lists (the server checks names and renames offices / past visits to match). */
-  const save = async (patch, message) => {
+  const load = () => api("/locations/status").then(setStatus).catch((e) => showToast(e.message));
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+
+  const report = status?.lastOk?.report || null;
+  const rules = status?.rules || { aliases: [], splits: [], dismissed: [] };
+
+  /** Runs a sync or saves rules (both rebuild the locations), then re-reads everything. */
+  const act = async (fn, done) => {
+    setBusy(true);
     try {
-      await onSaveStructure({ ...s, ...patch });
-      showToast(message);
-    } catch (err) {
-      showToast(err.message);
+      setStatus(await fn());
+      await onLocationsChanged();
+      showToast(done);
+    } catch (e) {
+      showToast(e.message);
+      load();
+    } finally {
+      setBusy(false);
     }
   };
+  const syncNow = () => act(() => api("/locations/sync", { method: "POST" }), "Synced with the branch API.");
+  const saveRules = (patch, done) => act(() => api("/locations/rules", { method: "PUT", body: { ...rules, ...patch } }), done);
 
   const counts = {
-    regions: s.regions.length, areas: s.areas.length, regionalOffices: s.regionalOffices.length, areaOffices: s.areaOffices.length,
+    sync: null,
+    spellings: report?.suggestions?.length ?? 0,
+    shared: rules.splits.length,
+    regions: s.regions.length,
+    areas: s.areas.length,
     purposes: (settings?.visitPurposes?.length ? settings.visitPurposes : DEFAULT_PURPOSES).length + 1,
   };
 
@@ -46,8 +70,8 @@ export default function LocationsTab({ structure, onSaveStructure, offices, sett
           <p className="h-eyebrow">Configuration</p>
           <h1 className="h-title">Locations & lists</h1>
           <p className="h-desc">
-            Division → Region → Area → Branch. Add the Regions and Areas here, then the offices in them. Branch Offices are on
-            the <b>Offices</b> tab. Everything here appears on the visit form straight away.
+            Divisions, regions, areas and offices come from <b>BRAC's branch API</b>, all programmes together: every night at 2 a.m., or
+            when you press <b>Sync now</b>. They can't be edited here. A branch sits in every area its programmes put it in.
           </p>
         </div>
       </div>
@@ -55,157 +79,256 @@ export default function LocationsTab({ structure, onSaveStructure, offices, sett
       <div className="filter-chips" style={{ marginBottom: 16 }}>
         {SECTIONS.map((x) => (
           <button key={x.key} className={`filter-chip ${section === x.key ? "active" : ""}`} onClick={() => setSection(x.key)}>
-            <x.icon size={13} /> {x.label} <span className="badge-count">{counts[x.key]}</span>
+            <x.icon size={13} /> {x.label} {counts[x.key] != null && <span className="badge-count">{counts[x.key]}</span>}
           </button>
         ))}
       </div>
 
+      {section === "sync" && <SyncPanel status={status} report={report} busy={busy} onSync={syncNow} s={s} offices={offices} />}
+      {section === "spellings" && <SpellingsPanel report={report} rules={rules} busy={busy} onSave={saveRules} />}
+      {section === "shared" && <SharedIdsPanel rules={rules} offices={offices} busy={busy} onSave={saveRules} />}
       {section === "regions" && (
-        <ListEditor
-          title="Regions" what="region" rows={s.regions}
-          hint="Each region belongs to one Division."
-          columns={[{ key: "division", label: "Division", options: () => s.divisions }]}
-          usage={(r) => s.areas.filter((a) => a.regionId === r.id).length + s.areaOffices.filter((o) => o.region === r.name).length + offices.filter((o) => o.district === r.name).length}
-          usageText="It has areas, area offices or branches: switch it off instead."
-          onSave={(rows, msg) => save({ regions: rows }, msg)}
-        />
+        <ReadOnlyList title="Regions" hint="Each region is shown once per division, holding the areas of every programme that uses the name."
+          rows={s.regions} columns={[{ label: "Division", get: (r) => r.division }, { label: "Areas", get: (r) => s.areas.filter((a) => a.regionId === r.id).length }]} />
       )}
-
       {section === "areas" && (
-        <ListEditor
-          title="Areas" what="area" rows={s.areas.map((a) => ({ ...a, regionLabel: a.region }))}
-          hint="Each area belongs to one Region (and so to that region's Division)."
-          columns={[{ key: "regionId", label: "Region", options: () => s.regions.map((r) => ({ value: r.id, label: `${r.name} · ${r.division.replace(/ Division$/, "")}` })) }]}
-          usage={(a) => offices.filter((o) => o.district === a.region && o.area === a.name).length}
-          usageText="It has branch offices: switch it off instead."
-          onSave={(rows, msg) => save({ areas: rows.map(({ regionLabel, ...a }) => a) }, msg)}
-        />
+        <ReadOnlyList title="Areas" hint="Each area is shown once per region, holding the branches of every programme that uses the name."
+          rows={s.areas} columns={[{ label: "Region", get: (a) => a.region }, { label: "Division", get: (a) => a.division }]} />
       )}
-
-      {section === "regionalOffices" && (
-        <ListEditor
-          title="Regional Offices" what="regional office" rows={s.regionalOffices}
-          hint="A Regional Office is placed in a Division. Staff see the Regional Offices of the visit's division."
-          columns={[{ key: "division", label: "Division", options: () => s.divisions }]}
-          onSave={(rows, msg) => save({ regionalOffices: rows }, msg)}
-        />
-      )}
-
-      {section === "areaOffices" && (
-        <ListEditor
-          title="Area Offices" what="area office" rows={s.areaOffices}
-          hint="An Area Office is placed in a Region (and so its Division). Staff see the Area Offices of the visit's region."
-          columns={[{ key: "region", label: "Region", options: () => s.regions.map((r) => ({ value: r.name, label: `${r.name} · ${r.division.replace(/ Division$/, "")}` })) }]}
-          onSave={(rows, msg) => save({ areaOffices: rows }, msg)}
-        />
-      )}
-
       {section === "purposes" && <PurposesEditor settings={settings} setSettings={setSettings} showToast={showToast} />}
     </div>
   );
 }
 
-/* ---------- one list (name + where it sits), with add / edit / switch off / delete ---------- */
+/* ---------- the last sync, Sync now, and what was left out ---------- */
 
-function ListEditor({ title, what, rows, hint, columns, usage, usageText, onSave }) {
-  const empty = () => Object.fromEntries([["name", ""], ...columns.map((c) => [c.key, ""])]);
-  const [form, setForm] = useState(null); // null | { id?, name, ...columns }
-  const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
-  const [sureId, setSureId] = useState(null);
-  const opts = (c) => c.options().map((o) => (typeof o === "string" ? { value: o, label: o } : o));
-  const labelOf = (c, v) => opts(c).find((o) => o.value === v)?.label || v || "—";
-
-  const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return rows.filter((r) => !q || `${r.name} ${columns.map((c) => labelOf(c, r[c.key])).join(" ")}`.toLowerCase().includes(q));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, query]);
-
-  const submit = () => {
-    const name = form.name.trim();
-    if (!name) return setError(`Give the ${what} a name.`);
-    for (const c of columns) if (!form[c.key]) return setError(`Choose the ${c.label.toLowerCase()}.`);
-    const scope = columns[0].key;
-    if (rows.some((r) => r.id !== form.id && r.name.toLowerCase() === name.toLowerCase() && (what === "region" || r[scope] === form[scope])))
-      return setError(`There is already a ${what} called "${name}"${what === "region" ? "" : " there"}.`);
-    const row = { ...form, name };
-    const next = form.id ? rows.map((r) => (r.id === form.id ? { ...r, ...row } : r)) : [...rows, { id: makeId(what === "region" ? "RGN" : what === "area" ? "AREA" : "OFF"), active: true, ...row }];
-    onSave(next, `${name} ${form.id ? "saved" : "added"}.`);
-    setForm(null);
-  };
-
-  const toggle = (r) => onSave(rows.map((x) => (x.id === r.id ? { ...x, active: x.active === false } : x)), `${r.name} ${r.active === false ? "switched on" : "switched off — it no longer shows on the visit form"}.`);
-  const remove = (r) => {
-    if (sureId !== r.id) { setSureId(r.id); return; }
-    setSureId(null);
-    onSave(rows.filter((x) => x.id !== r.id), `${r.name} deleted.`);
-  };
-
+function SyncPanel({ status, report, busy, onSync, s, offices }) {
+  if (!status) return <div className="card card-pad"><p className="analytics-card-sub" style={{ margin: 0 }}>Loading…</p></div>;
+  const last = status.runs?.[0];
+  const sk = report?.skipped;
+  const leftOutDivisions = sk ? Object.entries(sk.divisions || {}) : [];
+  const branches = offices.filter((o) => o.active !== false).length;
   return (
-    <div className="card card-pad">
-      <div className="section-header">
-        <div>
-          <p className="analytics-card-title" style={{ marginBottom: 2 }}>{title}</p>
-          <p className="analytics-card-sub" style={{ margin: 0 }}>{hint}</p>
+    <>
+      <div className="card card-pad" style={{ marginBottom: 16 }}>
+        <div className="section-header">
+          <div>
+            <p className="analytics-card-title" style={{ marginBottom: 2 }}>Branch API</p>
+            <p className="analytics-card-sub" style={{ margin: 0 }}>
+              {status.apiConfigured
+                ? <>Last successful sync: <b>{when(status.lastOk?.finishedAt)}</b>{status.lastOk ? ` · ${status.lastOk.message}` : ""}</>
+                : <>Not set up yet: the server needs the variables <b>BRANCH_API_URL</b> and <b>BRANCH_API_TOKEN</b>.{status.lastOk ? ` Lists last loaded ${when(status.lastOk.finishedAt)}.` : ""}</>}
+            </p>
+          </div>
+          <button className="btn btn-primary btn-sm" disabled={busy || !status.apiConfigured || status.running} onClick={onSync}>
+            <RefreshCw size={14} className={busy ? "spin" : undefined} /> {busy ? "Working…" : "Sync now"}
+          </button>
         </div>
-        {!form && <button className="btn btn-primary btn-sm" onClick={() => { setForm(empty()); setError(""); }}><Plus size={14} /> Add {what}</button>}
+        {last && last.status !== "ok" && (
+          <div className="form-error" role="alert" style={{ marginTop: 12 }}>
+            {TRIGGER[last.trigger] || last.trigger} on {when(last.startedAt)}: {last.status === "refused" ? "refused" : last.status} — {last.message}
+          </div>
+        )}
+        <div className="kpi-grid" style={{ marginTop: 14 }}>
+          {[["Divisions", s.divisions.length], ["Regions", s.regions.length], ["Areas", s.areas.length], ["Branch offices", branches],
+            ["Regional + area offices", s.regionalOffices.length + s.areaOffices.length]].map(([label, n]) => (
+            <div key={label} className="kpi"><div className="kpi-num">{n.toLocaleString()}</div><div className="kpi-label">{label}</div></div>
+          ))}
+        </div>
       </div>
 
-      {form && (
-        <div className="card card-pad page-enter" style={{ margin: "12px 0 16px", background: "var(--paper, transparent)" }}>
-          <div className="field-row">
-            <div className="field-group">
-              <label className="field-label">Name</label>
-              <input className="input" autoFocus value={form.name} onChange={(e) => { setForm({ ...form, name: e.target.value }); setError(""); }} onKeyDown={(e) => e.key === "Enter" && submit()} />
-            </div>
-            {columns.map((c) => (
-              <div className="field-group" key={c.key}>
-                <label className="field-label">{c.label}</label>
-                <select className="select" value={form[c.key]} onChange={(e) => { setForm({ ...form, [c.key]: e.target.value }); setError(""); }}>
-                  <option value="">Select {c.label.toLowerCase()}…</option>
-                  {opts(c).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-            ))}
-          </div>
-          {form.id && <p className="field-hint" style={{ marginTop: -4 }}>Renaming or moving it also updates its offices and past visits.</p>}
-          {error && <div className="form-error" role="alert">{error}</div>}
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="btn btn-primary" onClick={submit}><Check size={14} /> {form.id ? "Save" : `Add ${what}`}</button>
-            <button className="btn btn-ghost" onClick={() => setForm(null)}><X size={14} /> Cancel</button>
-          </div>
+      {report && (
+        <div className="card card-pad" style={{ marginBottom: 16 }}>
+          <p className="analytics-card-title" style={{ marginBottom: 2 }}>What the last sync used</p>
+          <p className="analytics-card-sub">
+            {report.apiRows?.toLocaleString()} rows from the API (one per branch per programme), {report.usedRows?.toLocaleString()} used.
+            Programmes: {(report.programmes || []).join(", ")}.
+          </p>
+          <ul className="place-list">
+            <li>Left out, no programme (old copies of rows that are listed again with a programme): {sk.noProgramme}</li>
+            <li>Left out, test records: {sk.test.length}{sk.test.length ? ` — ${sk.test.join(", ")}` : ""}</li>
+            <li>Left out, offices that aren't branches (regional, market and head offices): {sk.notBranch.length}</li>
+            {leftOutDivisions.length > 0 && <li>Left out, divisions without branch offices: {leftOutDivisions.map(([d, n]) => `${d} (${n})`).join(", ")}</li>}
+            {(report.splitBranches || []).length > 0 && <li>Branch IDs shared by two offices: {report.splitBranches.join(", ")}</li>}
+            {(report.codedNames || []).length > 0 && <li>Branches shown with their code, because another branch in the region has the same name: {report.codedNames.length}</li>}
+          </ul>
+          {sk.notBranch.length > 0 && (
+            <details style={{ marginTop: 10 }}>
+              <summary className="field-hint" style={{ cursor: "pointer" }}>Show the offices left out</summary>
+              <p className="field-hint">{sk.notBranch.join(" · ")}</p>
+            </details>
+          )}
         </div>
       )}
 
-      <div className="toolbar" style={{ marginTop: 12 }}>
-        <div className="search-box"><input className="input" placeholder={`Search ${title.toLowerCase()}…`} value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+      <div className="card card-pad">
+        <p className="analytics-card-title" style={{ marginBottom: 2 }}>Recent syncs</p>
+        <p className="analytics-card-sub">A sync that would remove many offices at once, or that doesn't add up to the API's own total, is refused and changes nothing.</p>
+        {(status.runs || []).length === 0 ? <div className="empty-state">No syncs yet.</div> : (
+          <div className="ctable-wrap">
+            <table className="ctable stack">
+              <thead><tr><th>When</th><th>How</th><th>Result</th><th>Details</th></tr></thead>
+              <tbody>
+                {status.runs.map((r) => (
+                  <tr key={r.id}>
+                    <td data-label="When">{when(r.startedAt)}</td>
+                    <td data-label="How">{TRIGGER[r.trigger] || r.trigger}</td>
+                    <td data-label="Result"><span className={`pill ${STATUS_PILL[r.status] || "pill-brand"}`}>{r.status}</span></td>
+                    <td data-label="Details"><span className="cell-sub">{r.message || "—"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+    </>
+  );
+}
 
-      {shown.length === 0 ? <div className="empty-state">No {title.toLowerCase()} yet.</div> : (
-        <div className="ctable-wrap">
-          <table className="ctable stack">
-            <thead><tr><th>Name</th>{columns.map((c) => <th key={c.key}>{c.label}</th>)}<th>Status</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
-            <tbody>
-              {shown.map((r) => {
-                const used = usage ? usage(r) : 0;
-                return (
-                  <tr key={r.id} style={r.active === false ? { opacity: 0.6 } : undefined}>
-                    <td data-label="Name"><div className="cell-main">{r.name}</div></td>
-                    {columns.map((c) => <td key={c.key} data-label={c.label}>{labelOf(c, r[c.key])}</td>)}
-                    <td data-label="Status">{r.active === false ? <span className="pill pill-stale">Off</span> : <span className="pill pill-ok">On</span>}</td>
+/* ---------- look-alike spellings: merge, or say they're different ---------- */
+
+const where = (x) => [x.division, x.region].filter(Boolean).join(" › ");
+
+function SpellingsPanel({ report, rules, busy, onSave }) {
+  const open = report?.suggestions || [];
+  const merge = (x, keep, fold) => onSave(
+    { aliases: [...rules.aliases, { level: x.level, division: x.division, region: x.region || "", from: fold, to: keep }] },
+    `"${fold}" is now part of "${keep}".`,
+  );
+  const dismiss = (x) => onSave({ dismissed: [...rules.dismissed, x.key] }, `Kept "${x.a}" and "${x.b}" apart.`);
+  const undo = (a) => onSave({ aliases: rules.aliases.filter((y) => y !== a) }, `"${a.from}" is separate again.`);
+  return (
+    <>
+      <div className="card card-pad" style={{ marginBottom: 16 }}>
+        <p className="analytics-card-title" style={{ marginBottom: 2 }}>Look-alike spellings</p>
+        <p className="analytics-card-sub">
+          Programmes sometimes spell one place differently, and each spelling then shows as its own region or area. Merge the ones that are
+          the same place (choose the spelling to keep), and mark the rest as different so they stop showing here.
+        </p>
+        {open.length === 0 ? <div className="empty-state">Nothing to check.</div> : (
+          <div className="ctable-wrap">
+            <table className="ctable stack">
+              <thead><tr><th>Spellings</th><th>Where</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
+              <tbody>
+                {open.map((x) => (
+                  <tr key={x.key}>
+                    <td data-label="Spellings"><div className="cell-main">{x.a} · {x.b}</div><div className="cell-sub">{x.level === "region" ? "Regions" : "Areas"}</div></td>
+                    <td data-label="Where">{where(x)}</td>
                     <td data-label="" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button className="btn btn-secondary btn-sm" onClick={() => { setForm({ id: r.id, name: r.name, ...Object.fromEntries(columns.map((c) => [c.key, r[c.key] || ""])) }); setError(""); window.scrollTo({ top: 0, behavior: "smooth" }); }}><Edit3 size={12} /> Edit</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => toggle(r)}><Power size={12} /> {r.active === false ? "Switch on" : "Switch off"}</button>
-                      {used === 0 ? (
-                        <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger)" }} onClick={() => remove(r)}><Trash2 size={12} /> {sureId === r.id ? "Tap again" : "Delete"}</button>
-                      ) : <span className="field-hint" title={usageText} style={{ marginLeft: 6 }}>in use</span>}
+                      <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => merge(x, x.a, x.b)}><GitMerge size={12} /> Keep "{x.a}"</button>
+                      <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => merge(x, x.b, x.a)}><GitMerge size={12} /> Keep "{x.b}"</button>
+                      <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => dismiss(x)}><X size={12} /> Different places</button>
                     </td>
                   </tr>
-                );
-              })}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="card card-pad">
+        <p className="analytics-card-title" style={{ marginBottom: 2 }}>Merged spellings</p>
+        <p className="analytics-card-sub">Each one folds a spelling into another. Undo to show them separately again.</p>
+        {rules.aliases.length === 0 ? <div className="empty-state">None yet.</div> : (
+          <div className="ctable-wrap">
+            <table className="ctable stack">
+              <tbody>
+                {rules.aliases.map((a) => (
+                  <tr key={`${a.level}|${a.division}|${a.region}|${a.from}`}>
+                    <td data-label="Merged"><div className="cell-main">{a.from} → {a.to}</div><div className="cell-sub">{a.level === "region" ? "Region" : "Area"} · {where(a)}</div></td>
+                    <td data-label="" style={{ textAlign: "right" }}><button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => undo(a)}><Undo2 size={12} /> Undo</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ---------- branch IDs that two different offices share ---------- */
+
+function SharedIdsPanel({ rules, offices, busy, onSave }) {
+  const [text, setText] = useState("");
+  const add = () => {
+    const id = text.trim();
+    if (!/^\d+$/.test(id)) return;
+    if (!rules.splits.includes(id)) onSave({ splits: [...rules.splits, id] }, `Branch ID ${id} is now treated as two offices where the names differ.`);
+    setText("");
+  };
+  const officesOf = (id) => offices.filter((o) => o.code === id || String(o.code || "").startsWith(`${id}.`));
+  return (
+    <div className="card card-pad">
+      <p className="analytics-card-title" style={{ marginBottom: 2 }}>Shared branch IDs</p>
+      <p className="analytics-card-sub">
+        A branch ID listed here is used by two different offices (the programmes give it different names). Each name becomes its own
+        branch: the first programme's keeps the ID, the next gets the ID with ".1" added (2853.1). Other IDs are always one branch, whatever the names.
+      </p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "8px 0 14px" }}>
+        <input className="input" style={{ flex: "1 1 200px" }} inputMode="numeric" placeholder="Branch ID, e.g. 2853" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <button className="btn btn-primary" disabled={busy} onClick={add}><Plus size={14} /> Add</button>
+      </div>
+      {rules.splits.length === 0 ? <div className="empty-state">None.</div> : (
+        <div className="ctable-wrap">
+          <table className="ctable stack">
+            <tbody>
+              {rules.splits.map((id) => (
+                <tr key={id}>
+                  <td data-label="Branch ID"><div className="cell-main mono">{id}</div></td>
+                  <td data-label="Offices">{officesOf(id).map((o) => `${o.name} (${o.code})`).join(" · ") || <span className="cell-sub">not in the API</span>}</td>
+                  <td data-label="" style={{ textAlign: "right" }}>
+                    <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => onSave({ splits: rules.splits.filter((x) => x !== id) }, `Branch ID ${id} is one office again.`)}><Trash2 size={12} /> Remove</button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- regions and areas, read-only ---------- */
+
+const PAGE = 50;
+
+function ReadOnlyList({ title, hint, rows, columns }) {
+  const [query, setQuery] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return rows.filter((r) => !q || `${r.name} ${columns.map((c) => c.get(r)).join(" ")}`.toLowerCase().includes(q));
+  }, [rows, columns, query]);
+  return (
+    <div className="card card-pad">
+      <p className="analytics-card-title" style={{ marginBottom: 2 }}>{title}</p>
+      <p className="analytics-card-sub">{hint}</p>
+      <div className="toolbar" style={{ marginTop: 12 }}>
+        <div className="search-box"><input className="input" placeholder={`Search ${title.toLowerCase()}…`} value={query} onChange={(e) => { setQuery(e.target.value); setShowAll(false); }} /></div>
+      </div>
+      {shown.length === 0 ? <div className="empty-state">No {title.toLowerCase()} found.</div> : (
+        <div className="ctable-wrap">
+          <table className="ctable stack">
+            <thead><tr><th>Name</th>{columns.map((c) => <th key={c.label}>{c.label}</th>)}</tr></thead>
+            <tbody>
+              {(showAll ? shown : shown.slice(0, PAGE)).map((r) => (
+                <tr key={r.id}>
+                  <td data-label="Name"><div className="cell-main">{r.name}</div></td>
+                  {columns.map((c) => <td key={c.label} data-label={c.label}>{c.get(r)}</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {shown.length > PAGE && (
+        <div style={{ textAlign: "center", marginTop: 14 }}>
+          <button className="btn btn-secondary btn-sm" onClick={() => setShowAll((x) => !x)}>{showAll ? "Show fewer" : `Show all ${shown.length}`}</button>
         </div>
       )}
     </div>

@@ -4,7 +4,6 @@ import { UserError } from '../common/error.filter';
 import { makeId } from '../common/ids';
 import { SessionUser } from '../auth/access';
 import { VisitsService } from '../visits/visits.service';
-import { relinkOffice } from '../visits/visit-rules';
 import { EmailDraft, MailService } from '../mail/mail.service';
 import * as rules from './action-items.logic';
 
@@ -80,21 +79,6 @@ export class ActionItemsService implements OnModuleInit, OnModuleDestroy {
     const emails = drafts.length ? await this.mail.queue(drafts) : [];
     if (emails.length) this.logger.log(`Sent ${emails.length} deadline reminder(s)`);
     return { emailsGenerated: emails.length, emails };
-  }
-
-  /** An office renamed or moved by the admin: its past visits follow. */
-  async relinkOffice(existing: any, form: any) {
-    if (!existing?.name || !form?.name) throw new UserError('Office details missing');
-    let changed = 0;
-    for (const v of await this.visits.all()) {
-      if (!relinkOffice(v, existing, form)) continue;
-      await this.visits.update(v.id, (visit) => {
-        const next = relinkOffice(visit, existing, form);
-        if (next) Object.assign(visit, next);
-      });
-      changed++;
-    }
-    return { changed };
   }
 
   // ---------- fixers (the person signed in) ----------

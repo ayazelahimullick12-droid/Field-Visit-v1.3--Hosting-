@@ -8,6 +8,8 @@
     "dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "node prisma/seed.js",
+    "db:demo": "node prisma/seed-demo.js",
+    "db:locations": "node dist/locations/cli.js",
     "db:import": "ts-node --transpile-only prisma/import-json.ts",
     "db:local": "node scripts/local-postgres.js"
   },
@@ -19,6 +21,7 @@
     "@nestjs/throttler": "^6.7.1",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
+    "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "nodemailer": "^10.1.2",
     "prisma": "^6.19.3",
@@ -27,6 +30,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^4.17.25",
     "@types/node": "^22.20.5",

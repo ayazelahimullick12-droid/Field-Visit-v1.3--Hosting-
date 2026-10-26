@@ -77,7 +77,7 @@ export default function RegisterVisit({ tree, purposes = REASONS, visit, prefill
 
   const [route, setRoute] = useState(() => {
     if (visit) return { division: visit.division || "", region: visit.region || "", area: visit.area || "", stops: (visit.stops || []).map((s) => ({ ...s })) };
-    if (prefill) return { division: prefill.division, region: prefill.district, area: prefill.area, stops: [{ kind: "branch", name: prefill.name, division: prefill.division, region: prefill.district, area: prefill.area }] };
+    if (prefill) return { division: prefill.division, region: prefill.district, area: prefill.area, stops: [{ kind: "branch", name: prefill.name, ...(prefill.id ? { officeId: prefill.id } : {}), division: prefill.division, region: prefill.district, area: prefill.area }] };
     return { division: "", region: "", area: "", stops: [] };
   });
   const [reason, setReason] = useState(visit?.reason || (purposes.includes("Monitoring") ? "Monitoring" : purposes[0]));
@@ -127,7 +127,7 @@ export default function RegisterVisit({ tree, purposes = REASONS, visit, prefill
 
   const allTimes = !!(date && visitTime && returnDate && returnTime);
   const duration = computeDuration(date, visitTime, returnDate, returnTime);
-  const why = !route.division || !route.region || !route.area ? "Select the division, district and area of the visit."
+  const why = !route.division || !route.region || !route.area ? "Select the division, region and area of the visit."
     : !date ? "Select the visit date."
     : reason === "Other" && !reasonOther.trim() ? "Specify the purpose of the visit."
     : returnDate && returnDate < date ? "The return date cannot be before the visit date."
