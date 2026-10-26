@@ -1412,6 +1412,11 @@ button.story-photo{ border:0; padding:0; cursor:pointer; font:inherit; color:inh
 .s1-legend{ display:flex; flex-wrap:wrap; gap:5px 14px; font-size:12.5px; color:var(--ink-soft); }
 .s1-legend i{ display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:5px; vertical-align:0; }
 .s1-legend b{ font-weight:750; color:var(--ink); }
+/* long legends and notes: two lines, the rest on hover / focus */
+.s1-clamp{ line-height:18px; max-height:41px; overflow:hidden; cursor:default; border-radius:6px; outline-offset:2px; }
+.s1-clamp-text{ display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; cursor:default; border-radius:6px; outline-offset:2px; }
+.s1-clamp:hover,.s1-clamp:focus{ max-height:none; }
+.s1-clamp-text:hover,.s1-clamp-text:focus{ -webkit-line-clamp:unset; display:block; }
 
 .s1-urow{ display:grid; grid-template-columns:72px 1fr 110px; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line-soft); font-size:12.5px; }
 .s1-urow:first-of-type{ border-top:0; }

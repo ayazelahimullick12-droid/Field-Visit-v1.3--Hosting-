@@ -293,15 +293,16 @@ function VisitsPanel({ F, words }) {
       </div>
       <div className="s1-panel-bottom">
         <MiniBar label="Purpose of visit" parts={purposes} />
-        <MiniBar label="Visits by unit" parts={units} foot={teams.length ? `Teams: ${teams.join(" · ")}` : null} />
-        <MiniBar label="Visits by division" parts={F.divisions.map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }))} />
+        <MiniBar label="Visits by unit" parts={units} foot={teams.length ? `Teams: ${teams.join(" · ")}` : null} clampFoot />
+        <MiniBar label="Visits by division" parts={F.divisions.map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }))} clampLegend />
       </div>
     </div>
   );
 }
 
-/** A labelled bar split into parts, with a one-line legend (used inside the visits panel). */
-function MiniBar({ label, parts, foot }) {
+/** A labelled bar split into parts, with a legend (used inside the visits panel). clampLegend / clampFoot:
+ *  show two lines of a long legend / note, the rest on hover (or tap / keyboard focus) and in the tooltip. */
+function MiniBar({ label, parts, foot, clampLegend = false, clampFoot = false }) {
   const total = parts.reduce((n, p) => n + p.value, 0);
   return (
     <div className="s1-minibar">
@@ -311,8 +312,10 @@ function MiniBar({ label, parts, foot }) {
           <div className="s1-bar" role="img" aria-label={parts.map((p) => `${p.label}: ${p.value}`).join(", ")}>
             {parts.map((p) => <span key={p.label} title={`${p.label}: ${p.value}`} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />)}
           </div>
-          <div className="s1-legend">{parts.map((p) => <span key={p.label}><i style={{ background: p.color }} />{p.label} <b>{p.value}</b></span>)}</div>
-          {foot && <p className="s1-note" style={{ marginTop: 4 }}>{foot}</p>}
+          <div className={`s1-legend${clampLegend ? " s1-clamp" : ""}`} {...(clampLegend ? { tabIndex: 0, title: parts.map((p) => `${p.label} ${p.value}`).join(" · ") } : {})}>
+            {parts.map((p) => <span key={p.label}><i style={{ background: p.color }} />{p.label} <b>{p.value}</b></span>)}
+          </div>
+          {foot && <p className={`s1-note${clampFoot ? " s1-clamp-text" : ""}`} {...(clampFoot ? { tabIndex: 0, title: foot } : {})} style={{ marginTop: 4 }}>{foot}</p>}
         </>
       )}
     </div>
