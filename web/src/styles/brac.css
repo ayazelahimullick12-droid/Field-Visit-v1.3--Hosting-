@@ -1717,3 +1717,31 @@ button.story-photo{ border:0; padding:0; cursor:pointer; font:inherit; color:inh
 .feed-more{ display:flex; justify-content:center; margin-top:18px; }
 .feed-more .btn{ gap:8px; }
 .feed-more-n{ font-size:11.5px; font-weight:700; color:var(--ink-faint); background:var(--line-soft); padding:2px 8px; border-radius:999px; }
+
+/* ---------- forms on phones: fields use the full width (no box inside a box), controls easy to tap ---------- */
+/* description boxes grow with what is typed, where the browser supports it */
+.textarea{ field-sizing:content; max-height:60vh; }
+@media (max-width:640px){
+  .page-narrow{ padding-left:12px; padding-right:12px; }
+  .wizard-head{ padding:16px 14px 12px; }
+  .wizard-body{ padding:16px 14px; }
+  .wizard-foot{ padding:12px 14px; }
+  .modal-body{ padding:16px 14px; }
+  /* a section is a heading with a rule under it, not a card inside the card */
+  .form-sec{ border:0; border-radius:0; background:transparent; padding:0; margin:0 0 22px; }
+  .form-sec > legend{ display:flex; width:100%; padding:0 0 8px; margin:0 0 12px; border-bottom:1px solid var(--line-soft); }
+  .person-box{ padding:12px 12px 2px; border-radius:14px; }
+  .stay-card{ padding:12px; }
+  .stay-types{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .field-group{ margin-bottom:16px; }
+  .textarea{ min-height:128px; }
+  /* at least 40px tall, so a thumb can hit them */
+  .link-btn,.stay-change{ min-height:40px; }
+  .os-skip-btn{ min-height:40px; padding:8px 10px; }
+  .os-chip{ min-height:40px; }
+  .os-chip.sm{ min-height:36px; padding:6px 12px; font-size:13px; }
+  .seg-btn{ min-height:40px; padding:9px 18px; }
+  .stars{ gap:4px; }
+  .star-btn{ min-width:44px; min-height:44px; padding:8px; display:grid; place-items:center; }
+  .modal-head .icon-btn{ width:42px; height:42px; }
+}

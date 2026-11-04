@@ -3,6 +3,7 @@ import { ArrowLeft, CalendarDays, Check, Trash2, Plus, BedDouble, X, GraduationC
 import { REASONS, STAY_TYPES, BLCS, tripDays, isoDate, countsOf } from "../../lib/visits";
 import { makeId } from "../../lib/ids";
 import { StopsEditor } from "./OfficeSearch";
+import { useNarrow, ph } from "../../lib/ui";
 
 const BLC = STAY_TYPES[0];
 const OTHER_BLC = "__other";
@@ -17,9 +18,12 @@ const NAME_PLACEHOLDERS = {
   "BRAC office": "Which BRAC office you are staying at, e.g. Rangpur Regional Office",
   Other: "Where you are staying, e.g. a relative's house in Bogura town",
 };
+// the same, short enough for a phone
+const NAME_PLACEHOLDERS_SHORT = { Hotel: "e.g. Hotel Al-Amin, Sylhet", "Guest house": "e.g. Parjatan Motel, Cox's Bazar", "BRAC office": "e.g. Rangpur Regional Office", Other: "e.g. a relative's house, Bogura" };
 
 /** One accommodation: first its type (a BLC, a hotel, a guest house…), then where, when and any remarks. */
 function StayCard({ stay: s, index, blcs, onChange, onRemove }) {
+  const narrow = useNarrow();
   const set = (patch) => onChange({ ...s, ...patch });
   const blcPick = blcs.includes(s.name) ? s.name : s.other ? OTHER_BLC : "";
   const Icon = STAY_ICONS[s.type] || BedDouble;
@@ -56,13 +60,13 @@ function StayCard({ stay: s, index, blcs, onChange, onRemove }) {
             <option value={OTHER_BLC}>Another BLC (type its name)</option>
           </select>
         ) : (
-          <input id={`stay-name-${s.id}`} className="input" autoFocus placeholder={NAME_PLACEHOLDERS[s.type] || NAME_PLACEHOLDERS.Other} value={s.name} onChange={(e) => set({ name: e.target.value })} />
+          <input id={`stay-name-${s.id}`} className="input" autoFocus placeholder={ph(narrow, NAME_PLACEHOLDERS[s.type] || NAME_PLACEHOLDERS.Other, NAME_PLACEHOLDERS_SHORT[s.type] || NAME_PLACEHOLDERS_SHORT.Other)} value={s.name} onChange={(e) => set({ name: e.target.value })} />
         )}
       </div>
       {s.type === BLC && blcPick === OTHER_BLC && (
         <div className="field-group">
           <label className="field-label" htmlFor={`stay-other-${s.id}`}>BLC name</label>
-          <input id={`stay-other-${s.id}`} className="input" autoFocus placeholder="The BLC's name as written on its signboard, e.g. BLC Bogura" value={s.name} onChange={(e) => set({ name: e.target.value })} />
+          <input id={`stay-other-${s.id}`} className="input" autoFocus placeholder={ph(narrow, "The BLC's name as written on its signboard, e.g. BLC Bogura", "As on its signboard, e.g. BLC Bogura")} value={s.name} onChange={(e) => set({ name: e.target.value })} />
         </div>
       )}
       <div className="field-row">
@@ -77,7 +81,7 @@ function StayCard({ stay: s, index, blcs, onChange, onRemove }) {
       </div>
       <div className="field-group" style={{ marginBottom: 0 }}>
         <label className="field-label" htmlFor={`stay-notes-${s.id}`}>Remarks {optional()}</label>
-        <input id={`stay-notes-${s.id}`} className="input" placeholder="Room number, the caretaker's name and phone, or anything a colleague staying there should know" value={s.notes} onChange={(e) => set({ notes: e.target.value })} />
+        <input id={`stay-notes-${s.id}`} className="input" placeholder={ph(narrow, "Room number, the caretaker's name and phone, or anything a colleague staying there should know", "Room no., caretaker's phone…")} value={s.notes} onChange={(e) => set({ notes: e.target.value })} />
       </div>
       </div>
       )}
@@ -98,6 +102,7 @@ const placeOfVisit = (stops) => {
  */
 export default function RegisterVisit({ purposes = REASONS, blcs = BLCS, visit, prefill, focusField, onSave, onCancel, onDelete }) {
   const edit = !!visit;
+  const narrow = useNarrow();
   const now = useMemo(() => new Date(), []);
 
   const [stops, setStops] = useState(() => {
@@ -213,7 +218,7 @@ export default function RegisterVisit({ purposes = REASONS, blcs = BLCS, visit, 
             {reason === "Other" && (
               <div className="field-group" style={{ marginBottom: 0 }}>
                 <label className="field-label" htmlFor="reg-reasonOther">Specify purpose <span className="req">*</span></label>
-                <input id="reg-reasonOther" className="input" autoFocus={!edit || !visit.reasonOther} placeholder="Why you are going, in a few words, e.g. follow-up on last month's audit findings" value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} maxLength={120} />
+                <input id="reg-reasonOther" className="input" autoFocus={!edit || !visit.reasonOther} placeholder={ph(narrow, "Why you are going, in a few words, e.g. follow-up on last month's audit findings", "e.g. follow-up on the last audit")} value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} maxLength={120} />
               </div>
             )}
           </fieldset>

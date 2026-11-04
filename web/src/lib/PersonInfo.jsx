@@ -1,4 +1,5 @@
 import React, { useId } from "react";
+import { useNarrow } from "./ui";
 
 /* Optional "who is this?" details, captured for client interactions, observations
    from staff and complaints, and shown to fixers and admins. Staff and members have different identifiers, but
@@ -7,18 +8,18 @@ import React, { useId } from "react";
 
 export const PERSON_FIELDS = {
   staff: [
-    { key: "name", label: "Name", placeholder: "Full name, e.g. Nasima Begum" },
-    { key: "pin", label: "PIN", inputMode: "numeric", placeholder: "Their staff PIN, e.g. 51023" },
-    { key: "designation", label: "Designation", placeholder: "Their job title, e.g. Branch Manager" },
-    { key: "department", label: "Department", suggest: true, placeholder: "Pick from the list or type, e.g. Microfinance" },
-    { key: "contact", label: "Contact", inputMode: "tel", placeholder: "Mobile number or email, e.g. 01712-345678" },
+    { key: "name", label: "Name", placeholder: "Full name, e.g. Nasima Begum", short: "e.g. Nasima Begum" },
+    { key: "pin", label: "PIN", inputMode: "numeric", placeholder: "Their staff PIN, e.g. 51023", short: "e.g. 51023" },
+    { key: "designation", label: "Designation", placeholder: "Their job title, e.g. Branch Manager", short: "e.g. Branch Manager" },
+    { key: "department", label: "Department", suggest: true, placeholder: "Pick from the list or type, e.g. Microfinance", short: "e.g. Microfinance" },
+    { key: "contact", label: "Contact", inputMode: "tel", placeholder: "Mobile number or email, e.g. 01712-345678", short: "Mobile or email" },
   ],
   member: [
-    { key: "name", label: "Name", placeholder: "Full name, e.g. Rahima Khatun" },
-    { key: "phone", label: "Phone", inputMode: "tel", placeholder: "Mobile number, e.g. 01712-345678" },
+    { key: "name", label: "Name", placeholder: "Full name, e.g. Rahima Khatun", short: "e.g. Rahima Khatun" },
+    { key: "phone", label: "Phone", inputMode: "tel", placeholder: "Mobile number, e.g. 01712-345678", short: "e.g. 01712-345678" },
     { key: "memberNumber", label: "Member number", placeholder: "As written in their passbook" },
-    { key: "voCode", label: "VO code", placeholder: "The VO they belong to, e.g. VO-142" },
-    { key: "branchCode", label: "Branch code", placeholder: "Their branch's code, e.g. 8772" },
+    { key: "voCode", label: "VO code", placeholder: "The VO they belong to, e.g. VO-142", short: "e.g. VO-142" },
+    { key: "branchCode", label: "Branch code", placeholder: "Their branch's code, e.g. 8772", short: "e.g. 8772" },
     { key: "projectCode", label: "Project code", placeholder: "As written in their passbook" },
   ],
 };
@@ -52,10 +53,11 @@ export function PersonFields({ kind, value, onChange, departments = [], title = 
 
 function PersonInput({ f, value, onChange, listId }) {
   const id = useId();
+  const narrow = useNarrow();
   return (
     <div className="field-group">
       <label className="field-label" htmlFor={id}>{f.label}</label>
-      <input id={id} className="input" autoComplete="off" inputMode={f.inputMode} list={listId} placeholder={f.placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      <input id={id} className="input" autoComplete="off" inputMode={f.inputMode} list={listId} placeholder={narrow && f.short ? f.short : f.placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
   );
 }

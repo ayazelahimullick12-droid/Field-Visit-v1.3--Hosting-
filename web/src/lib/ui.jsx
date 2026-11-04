@@ -4,6 +4,24 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 /* Small animation + display primitives shared across the sign-in page, the
    staff app and the admin console. Everything respects prefers-reduced-motion. */
 
+/** True on a phone-sized screen (follows rotation and resizing). */
+export function useNarrow(query = "(max-width: 640px)") {
+  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia ? window.matchMedia(query).matches : false);
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia(query);
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [query]);
+  return narrow;
+}
+
+/** A placeholder in two lengths: the full description, and a short one for phones, where a
+ *  single-line field only shows about 30 characters. */
+export const ph = (narrow, full, short) => (narrow ? short : full);
+
 export function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(() =>
     typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false

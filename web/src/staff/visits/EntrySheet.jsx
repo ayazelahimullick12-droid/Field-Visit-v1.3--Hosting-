@@ -11,6 +11,7 @@ import { EntryPlacePicker } from "./OfficeSearch";
 import ConfirmDialog from "./Confirm";
 import Portal from "../../lib/Portal";
 import Resolution from "../../lib/Resolution";
+import { useNarrow, ph } from "../../lib/ui";
 
 const STORY_GRADIENTS = [
   "linear-gradient(135deg,#EC008C 0%,#7A1FA2 100%)",
@@ -141,6 +142,7 @@ export function VisitContext({ visit }) {
 export default function EntrySheet({ type, entry, visit, departments, questions, onSave, onDelete, onClose, showToast }) {
   const start = useMemo(() => draftFrom(type, entry, defaultPlaces(visit, type)), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [d, setD] = useState(start);
+  const narrow = useNarrow();
   const [whoOpen, setWhoOpen] = useState(() => hasPerson(entry?.person));
   const [recording, setRecording] = useState(false);
   const [sureDelete, setSureDelete] = useState(false);
@@ -230,7 +232,7 @@ export default function EntrySheet({ type, entry, visit, departments, questions,
           <legend>Issue details</legend>
           <div className="field-group">
             <label className="field-label" htmlFor="entry-title">Title {req}</label>
-            <input id="entry-title" className="input" maxLength={120} placeholder="One line on what is wrong, e.g. Loan disbursement delayed by two weeks" value={d.title} onChange={(e) => set({ title: e.target.value })} />
+            <input id="entry-title" className="input" maxLength={120} placeholder={ph(narrow, "One line on what is wrong, e.g. Loan disbursement delayed by two weeks", "e.g. Loan disbursement delayed")} value={d.title} onChange={(e) => set({ title: e.target.value })} />
           </div>
           {description("Description", "What is wrong, who it affects, since when, and what you saw or were told. The more specific, the faster it can be resolved.")}
           <div className="field-group">
@@ -346,7 +348,7 @@ export default function EntrySheet({ type, entry, visit, departments, questions,
         <legend>Story</legend>
         <div className="field-group">
           <label className="field-label" htmlFor="entry-title">Title {req}</label>
-          <input id="entry-title" className="input" maxLength={120} placeholder="A short headline, e.g. Rina's tailoring shop now employs three women" value={d.title} onChange={(e) => set({ title: e.target.value })} />
+          <input id="entry-title" className="input" maxLength={120} placeholder={ph(narrow, "A short headline, e.g. Rina's tailoring shop now employs three women", "e.g. Rina's shop now employs three")} value={d.title} onChange={(e) => set({ title: e.target.value })} />
         </div>
         <div className="field-group">
           <label className="field-label" htmlFor="entry-caption">Description {req}</label>
@@ -358,7 +360,7 @@ export default function EntrySheet({ type, entry, visit, departments, questions,
         </div>
         <div className="field-group" style={{ marginBottom: 0 }}>
           <label className="field-label" htmlFor="entry-location">Location {optional()}</label>
-          <input id="entry-location" className="input" maxLength={160} placeholder="Where it happened, e.g. Mirpur branch, VO-142" value={d.locationText} onChange={(e) => set({ locationText: e.target.value })} />
+          <input id="entry-location" className="input" maxLength={160} placeholder={ph(narrow, "Where it happened, e.g. Mirpur branch, VO-142", "e.g. Mirpur branch, VO-142")} value={d.locationText} onChange={(e) => set({ locationText: e.target.value })} />
         </div>
       </fieldset>
     );

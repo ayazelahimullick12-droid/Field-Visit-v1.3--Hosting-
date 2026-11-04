@@ -135,7 +135,7 @@ export default function VisitHub({ visit: v, departments, questions, sync, initi
         {ss.map((e) => <EntryRow key={e.id} e={e} onOpen={() => openEntry(e)} />)}
         {!list.length && !readOnly && (
           <button type="button" className="ep-empty" onClick={() => setSheet({ type: openType })}>
-            <Plus size={16} /> Add a {ENTRY_TYPES[openType].label.toLowerCase()}
+            <Plus size={16} /> Add {/^[aeiou]/i.test(ENTRY_TYPES[openType].label) ? "an" : "a"} {ENTRY_TYPES[openType].label.toLowerCase()}
           </button>
         )}
       </section>

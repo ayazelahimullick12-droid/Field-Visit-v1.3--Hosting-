@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Plus, X, ArrowUp, ArrowDown, Building2, Users, Info, Undo2, ChevronLeft, ClipboardList, MapPinOff } from "lucide-react";
 import { getOfficeList } from "../../lib/offices";
 import { voName, placeKey, placeOfStop, isoDate } from "../../lib/visits";
+import { useNarrow, ph } from "../../lib/ui";
 
 /* Where a visit goes: offices picked one by one by searching, like the stops of a trip.
    No Division › Region › Area to choose first: the office list knows where each office is.
@@ -80,17 +81,6 @@ export function officeToPlace(o) {
   return { division: s.division, region: s.region, area: s.area, office: o.name, officeId: o.id, officeKind: o.kind, branch: o.kind === "branch" ? o.name : "" };
 }
 
-function useNarrow() {
-  const [narrow, setNarrow] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches);
-  useEffect(() => {
-    const m = window.matchMedia("(max-width: 640px)");
-    const on = () => setNarrow(m.matches);
-    m.addEventListener("change", on);
-    return () => m.removeEventListener("change", on);
-  }, []);
-  return narrow;
-}
-
 const KindIcon = ({ kind, size = 14 }) => (kind === "vo" ? <Users size={size} /> : <Building2 size={size} />);
 
 /** One result line: name (matched part marked), type, code, and where it is. */
@@ -163,7 +153,8 @@ export function OfficeSearchBox({ kinds = ["branch", "area", "region"], taken = 
     <div className="os-field">
       <Search size={15} aria-hidden="true" />
       <input ref={input} id={`${idPrefix}-search`} className="input" autoComplete="off" value={query} role="combobox" aria-expanded={open} aria-controls={`${idPrefix}-results`}
-             placeholder={placeholder || (kind === "branch" ? "Branch name or code, e.g. Kaligonj or 8772" : kind === "any" ? "Office name or branch code, e.g. Kaligonj or 8772" : `${KIND_LABEL[kind]} name`)}
+             placeholder={placeholder || (kind === "branch" ? ph(narrow, "Branch name or code, e.g. Kaligonj or 8772", "Branch name or code")
+                                          : kind === "any" ? ph(narrow, "Office name or branch code, e.g. Kaligonj or 8772", "Office name or code") : `${KIND_LABEL[kind]} name`)}
              onChange={(e) => { setQuery(e.target.value); setOpen(true); setNote(""); }} onFocus={() => setOpen(true)}
              onBlur={() => { if (!narrow) setTimeout(() => setOpen(false), 150); }} onKeyDown={onKey} />
       {query && <button type="button" className="icon-btn" aria-label="Clear search" onMouseDown={(e) => { e.preventDefault(); setQuery(""); }}><X size={14} /></button>}
@@ -216,11 +207,12 @@ export function OfficeSearchBox({ kinds = ["branch", "area", "region"], taken = 
 const normCode = (raw) => raw.trim().toUpperCase().replace(/\s+/g, "-");
 function VoAdd({ onAdd }) {
   const [text, setText] = useState(null);
+  const narrow = useNarrow();
   if (text === null) return <button type="button" className="link-btn os-vo-add" onClick={() => setText("")}><Plus size={12} /> VO code</button>;
   // several codes are separated by commas; "vo 142" is one code (VO-142)
   const add = () => { text.split(/[,;]+/).map(normCode).filter(Boolean).forEach(onAdd); setText(null); };
   return (
-    <input className="input os-vo-input" autoFocus placeholder="The VO's code or name, e.g. VO-142" value={text} onChange={(e) => setText(e.target.value)}
+    <input className="input os-vo-input" autoFocus placeholder={ph(narrow, "The VO's code or name, e.g. VO-142", "e.g. VO-142")} value={text} onChange={(e) => setText(e.target.value)}
            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } if (e.key === "Escape") setText(null); }} onBlur={add} />
   );
 }
@@ -242,6 +234,7 @@ function StopDetails({ stop }) {
  * VO codes under their branch, and the search to add the next one. `value` / onChange: the stops.
  */
 export function StopsEditor({ value, onChange, idPrefix = "stops" }) {
+  const narrow = useNarrow();
   const [openInfo, setOpenInfo] = useState(null);
   const [removed, setRemoved] = useState(null); // { stops, name } for Undo
   const timer = useRef(null);
@@ -309,7 +302,7 @@ export function StopsEditor({ value, onChange, idPrefix = "stops" }) {
         <span className="os-num add" aria-hidden="true"><Plus size={13} /></span>
         <div className="os-stop-main">
           <OfficeSearchBox taken={taken} keepOpen idPrefix={idPrefix} onPick={(o) => add([o])} onPickMany={add}
-                           placeholder={offices.length ? "Add another office: its name or branch code" : undefined} />
+                           placeholder={offices.length ? ph(narrow, "Add another office: its name or branch code", "Add another office") : undefined} />
         </div>
       </div>
     </div>
@@ -390,6 +383,7 @@ const SKIP_REASONS = ["Office closed", "Not enough time", "Plan changed", "Other
  * an office added during the trip. `onChange(stops)` saves the visit.
  */
 export function VisitStops({ visit, readOnly, onChange }) {
+  const narrow = useNarrow();
   const stops = visit.stops || [];
   const offices = stops.filter((s) => s.kind !== "vo");
   const [skipping, setSkipping] = useState(null); // index of the office being marked
@@ -427,7 +421,7 @@ export function VisitStops({ visit, readOnly, onChange }) {
                 <select className="select" aria-label="Why not" value={reason} onChange={(e) => setReason(e.target.value)}>
                   {SKIP_REASONS.map((r) => <option key={r}>{r}</option>)}
                 </select>
-                {reason === "Other" && <input className="input" autoFocus placeholder="Why you couldn't go, e.g. the road was flooded" value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} />}
+                {reason === "Other" && <input className="input" autoFocus placeholder={ph(narrow, "Why you couldn't go, e.g. the road was flooded", "e.g. the road was flooded")} value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} />}
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => saveSkip(s)}>Save</button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSkipping(null)}>Cancel</button>
               </div>
