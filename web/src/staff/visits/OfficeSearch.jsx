@@ -153,8 +153,8 @@ export function OfficeSearchBox({ kinds = ["branch", "area", "region"], taken = 
     <div className="os-field">
       <Search size={15} aria-hidden="true" />
       <input ref={input} id={`${idPrefix}-search`} className="input" autoComplete="off" value={query} role="combobox" aria-expanded={open} aria-controls={`${idPrefix}-results`}
-             placeholder={placeholder || (kind === "branch" ? ph(narrow, "Branch name or code, e.g. Kaligonj or 8772", "Branch name or code")
-                                          : kind === "any" ? ph(narrow, "Office name or branch code, e.g. Kaligonj or 8772", "Office name or code") : `${KIND_LABEL[kind]} name`)}
+             placeholder={placeholder || (kind === "branch" ? ph(narrow, "Branch name or code, e.g. Kaligonj or 8772", "Name or code")
+                                          : kind === "any" ? ph(narrow, "Office name or branch code, e.g. Kaligonj or 8772", "Name or code") : `${KIND_LABEL[kind]} name`)}
              onChange={(e) => { setQuery(e.target.value); setOpen(true); setNote(""); }} onFocus={() => setOpen(true)}
              onBlur={() => { if (!narrow) setTimeout(() => setOpen(false), 150); }} onKeyDown={onKey} />
       {query && <button type="button" className="icon-btn" aria-label="Clear search" onMouseDown={(e) => { e.preventDefault(); setQuery(""); }}><X size={14} /></button>}
