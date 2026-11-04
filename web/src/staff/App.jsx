@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   MapPin, Calendar, ChevronRight, ChevronUp, ChevronDown, Plus, Check,
   MessageCircle, Home, Wrench, Search, ClipboardList, BarChart3, CheckCheck, User, Users, Eye, Image as ImageIcon,
@@ -14,11 +14,11 @@ import { PersonDetails } from "../lib/PersonInfo";
 import { FEATURES } from "../lib/features";
 import BdOutline from "../lib/BdOutline";
 import { CountUp, Reveal, Sparkline, DeltaChip } from "../lib/ui";
-import { buildLocationTree, computeCoverage, monthBuckets, monthKeyOf, DEFAULT_SETTINGS, STATUS_META, setOfficeDirectory } from "../lib/offices";
-import { purposesOf, expandVisits, submittedComplaints, phaseOf, PHASES, tripTitle, isoDate, plural, shortName, isDraft, countsOf, placeOffice, inFixerQueue } from "../lib/visits";
-import Management, { visibleMgmtTabs, EMPTY_MGMT_VIEW } from "./management/Management";
-import { managementTabOn } from "../lib/features";
+import { computeCoverage, monthBuckets, monthKeyOf, DEFAULT_SETTINGS, STATUS_META, setOfficeDirectory } from "../lib/offices";
+import { purposesOf, blcsOf, expandVisits, submittedComplaints, phaseOf, PHASES, tripTitle, isoDate, plural, shortName, isDraft, countsOf, placeOffice, inFixerQueue } from "../lib/visits";
+import Management, { MGMT_TABS, EMPTY_MGMT_VIEW } from "./management/Management";
 import BranchProfile from "./BranchProfile";
+import { ProgrammePulse, ProgrammeOverview, useProgrammeData } from "./ProgrammePulse";
 import VisitCard, { VisitGroups } from "./visits/VisitCard";
 import RegisterVisit from "./visits/RegisterVisit";
 import VisitHub from "./visits/VisitHub";
@@ -32,7 +32,7 @@ import { statusOf, isFixed, isLate } from "../lib/complaints";
 
 // The four kinds of user: base users (field staff), fixers and management sign in
 // here; admins use the admin console. Everyone here can register visits.
-export const ROLE_LABELS = { field: "Base user", fixer: "Fixer", management: "Management" };
+export const ROLE_LABELS = { field: "Base user", fixer: "Resolver", management: "Management" };
 const roleText = (roles) => (roles.length ? roles.map((r) => ROLE_LABELS[r] || r) : [ROLE_LABELS.field]);
 
 export default function App() {
@@ -42,6 +42,8 @@ export default function App() {
   const [offices] = usePersistedCollection("offices", []);
   const [structure] = usePersistedCollection("structure", {}); // regions, areas, regional and area offices
   const [settings] = usePersistedCollection("settings", DEFAULT_SETTINGS);
+  // the programme as a whole (counts only, as the public summary): the dashboard tiles and Programme overview
+  const programme = useProgrammeData();
   // Visits work offline: kept on the phone and sent when there's signal.
   const store = useVisitStore();
   const visits = store.visits;
@@ -107,7 +109,6 @@ export default function App() {
   const seesNetwork = isManagement && FEATURES.managementSeesNetworkCoverage;
   // where every office is (a branch can sit in several areas): read by the filters and figures
   const directory = useMemo(() => { setOfficeDirectory(offices, structure); return {}; }, [offices, structure]);
-  const tree = useMemo(() => buildLocationTree(offices, structure), [offices, structure]);
   const target = settings?.visitTargetDays || DEFAULT_SETTINGS.visitTargetDays;
   const questions = settings?.clientRatingQuestions || [];
   // the analytics, coverage and Branch 360° read one record per office of each visit (submitted entries only)
@@ -176,12 +177,12 @@ export default function App() {
   const tabs = [
     { key: "dashboard", label: "Dashboard", short: "Home", icon: Home },
     { key: "history", label: "Visits", short: "Visits", icon: ClipboardList },
-    { key: "myComplaints", label: "My action items", short: "Action items", icon: MessageCircle },
+    { key: "myComplaints", label: "My encountered issues", short: "Issues", icon: MessageCircle },
     ...(isManagement ? [{ key: "mgmt", label: "Management", short: "Manage", icon: BarChart3 }] : []),
-    ...(isFixer ? [{ key: "fixerQueue", label: "Action item queue", short: "Queue", icon: Wrench, count: assignedOpen }] : []),
+    ...(isFixer ? [{ key: "fixerQueue", label: "Issue queue", short: "Queue", icon: Wrench, count: assignedOpen }] : []),
   ];
   // the visit screens belong to "Visits"; a branch profile belongs to whichever page it was opened from
-  const shellActive = ["register", "visit", "done"].includes(staffTab) ? "history" : staffTab === "branch" ? (prevTab || "dashboard")
+  const shellActive = ["register", "visit", "done"].includes(staffTab) ? "history" : staffTab === "programme" ? "dashboard" : staffTab === "branch" ? (prevTab || "dashboard")
     : staffTab === "complaint" ? (complaintRef?.back || "myComplaints") : staffTab;
   const storyAll = storyRef ? allStories(visits) : [];
   const openStory = storyRef ? storyAll.find((x) => x.visitId === storyRef.visitId && x.id === storyRef.id) : null;
@@ -192,16 +193,16 @@ export default function App() {
     { id: "go-dash", group: "Go to", label: "Dashboard", icon: Home, run: () => go("dashboard") },
     { id: "go-new", group: "Go to", label: "Register a new visit", icon: Plus, run: () => openNewVisit() },
     { id: "go-visits", group: "Go to", label: "My visits", icon: ClipboardList, run: () => go("history") },
-    { id: "go-comp", group: "Go to", label: "My action items", icon: MessageCircle, run: () => go("myComplaints") },
-    ...(isManagement ? visibleMgmtTabs(settings).map((t) => ({ id: `go-m-${t.key}`, group: "Management", label: t.label, icon: t.icon, run: () => openMgmt({ tab: t.key }) })) : []),
-    ...(isManagement && managementTabOn(settings, "people") ? employees.map((e) => ({
+    { id: "go-comp", group: "Go to", label: "My encountered issues", icon: MessageCircle, run: () => go("myComplaints") },
+    ...(isManagement ? MGMT_TABS.map((t) => ({ id: `go-m-${t.key}`, group: "Management", label: t.label, icon: t.icon, run: () => openMgmt({ tab: t.key }) })) : []),
+    ...(isManagement ? employees.map((e) => ({
       id: `p-${e.id}`, group: "People", label: e.name,
       sub: [e.designation, e.department, e.pin && `PIN ${e.pin}`].filter(Boolean).join(" · "),
       icon: User, run: () => openMgmt({ personId: e.id }),
     })) : []),
-    ...(isFixer ? [{ id: "go-fix", group: "Go to", label: "Action item queue", icon: Wrench, run: () => go("fixerQueue") }] : []),
+    ...(isFixer ? [{ id: "go-fix", group: "Go to", label: "Issue queue", icon: Wrench, run: () => go("fixerQueue") }] : []),
     // branch search for management; the coverage status is only shown to those who may see coverage
-    ...(isManagement && managementTabOn(settings, "offices") ? coverage.map((o) => ({
+    ...(isManagement ? coverage.map((o) => ({
       id: o.key, group: "Branches", label: o.name,
       sub: seesNetwork ? `${o.area} · ${o.district} — ${STATUS_META[o.status].label}` : `${o.area} · ${o.district}`,
       icon: MapPin, color: seesNetwork ? STATUS_META[o.status].color : undefined, run: () => openBranch(o),
@@ -221,14 +222,19 @@ export default function App() {
         sync={sync}
         onNew={() => openNewVisit()} onOpenVisit={openVisit} onViewHistory={() => go("history")}
         onRefresh={store.refresh} showToast={showToast} onOpenStory={(st) => setStoryRef({ visitId: st.visitId, id: st.id })}
+        programme={programme} isManagement={isManagement}
+        onMore={() => (isManagement ? openMgmt({ tab: "summary" }) : go("programme"))}
+        onOpenComplaint={(c) => openComplaint({ ...c, visitId: c.visitId || myVisits.find((v) => (v.complaints || []).some((x) => x.id === c.id))?.id })}
       />
     );
+  } else if (staffTab === "programme") {
+    content = <ProgrammeOverview programme={programme} onBack={() => go("dashboard")} />;
   } else if (staffTab === "mgmt" && isManagement) {
     content = (
       <Management
         view={mgmtView} setView={setMgmtView}
         trips={visits} records={reportVisits} coverage={coverage} offices={offices}
-        employees={employees} departments={departments} settings={settings} tree={tree} questions={questions}
+        employees={employees} departments={departments} settings={settings} questions={questions}
         onOpenBranch={openBranch}
       />
     );
@@ -251,7 +257,7 @@ export default function App() {
     content = (
       <RegisterVisit
         key={registerCtx.visitId || "new"}
-        tree={tree} purposes={purposesOf(settings)} visit={editingVisit} prefill={registerCtx.prefill} focusField={registerCtx.focus}
+        purposes={purposesOf(settings)} blcs={blcsOf(settings)} visit={editingVisit} prefill={registerCtx.prefill} focusField={registerCtx.focus}
         onSave={saveRegistration} onCancel={cancelRegistration}
         onDelete={editingVisit ? () => { store.deleteVisit(editingVisit.id); setRegisterCtx(null); showToast("Visit deleted"); go("dashboard"); } : null}
       />
@@ -260,7 +266,7 @@ export default function App() {
     content = (
       <VisitHub
         key={activeVisit.id}
-        visit={activeVisit} tree={tree} departments={departments} questions={questions} sync={sync} initialSheet={hubSheet}
+        visit={activeVisit} departments={departments} questions={questions} sync={sync} initialSheet={hubSheet}
         onSave={store.saveVisit} showToast={showToast}
         onEditDetails={(focus) => editVisit(focus || null)}
         onMarkedDone={() => go("done")}
@@ -310,7 +316,7 @@ function SectionHead({ eyebrow, action }) {
   );
 }
 
-function StaffDashboard({ currentEmployee, visits, myVisits, sync, onNew, onOpenVisit, onViewHistory, onRefresh, showToast, onOpenStory }) {
+function StaffDashboard({ currentEmployee, visits, myVisits, sync, onNew, onOpenVisit, onViewHistory, onRefresh, showToast, onOpenStory, programme, isManagement, onMore, onOpenComplaint }) {
   // Every number here is derived live from the visits — nothing is tracked
   // separately, so it always matches what's actually stored.
   const myComplaints = myVisits.flatMap((v) => (v.complaints || []).filter((c) => !isDraft(c)));
@@ -337,9 +343,19 @@ function StaffDashboard({ currentEmployee, visits, myVisits, sync, onNew, onOpen
   const officesVisited = new Set(expandVisits(myVisits).map((r) => r.location)).size;
 
   const [overviewExpanded, setOverviewExpanded] = useState(false);
-  const [storiesExpanded, setStoriesExpanded] = useState(false);
+  // the story feed shows 4, then 8 more per "Show more" (at the top of the feed or at its end)
   const STORY_PREVIEW_COUNT = 4;
-  const visibleStories = storiesExpanded ? stories : stories.slice(0, STORY_PREVIEW_COUNT);
+  const STORY_STEP = 8;
+  const [storyCount, setStoryCount] = useState(STORY_PREVIEW_COUNT);
+  const feedRef = useRef(null);
+  const visibleStories = stories.slice(0, storyCount);
+  const storiesLeft = Math.max(0, stories.length - storyCount);
+  const showMoreStories = () => setStoryCount((n) => n + STORY_STEP);
+  const showFewerStories = () => {
+    setStoryCount(STORY_PREVIEW_COUNT);
+    // once the feed has shrunk, bring its heading back into view
+    requestAnimationFrame(() => requestAnimationFrame(() => feedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })));
+  };
   const roles = currentEmployee.roles || [];
 
   const tile = (i, icon, cls, value, label, color) => (
@@ -366,10 +382,17 @@ function StaffDashboard({ currentEmployee, visits, myVisits, sync, onNew, onOpen
           </div>
           <button className="btn btn-primary btn-lg" onClick={onNew}><Plus size={18} strokeWidth={2.6} /> Register a visit</button>
         </div>
-        <div className="hero-tiles">
-          <div className="hero-tile glass"><div className="ht-num"><CountUp value={myVisits.length} /></div><div className="ht-label">Total visits</div></div>
-          <div className="hero-tile glass"><div className="ht-num"><CountUp value={thisMonth} /></div><div className="ht-label">This month</div></div>
-          <div className="hero-tile glass"><div className="ht-num"><CountUp value={officesVisited} /></div><div className="ht-label">Offices visited</div></div>
+        {/* left: the programme this month, with your part in it; right: your own numbers */}
+        <div className="hero-split">
+          <ProgrammePulse programme={programme} myVisits={myVisits} isManagement={isManagement} onMore={onMore} onOpenComplaint={onOpenComplaint} />
+          <div className="hero-you">
+            <span className="pp-title">You</span>
+            <div className="hero-tiles">
+              <div className="hero-tile glass"><div className="ht-num"><CountUp value={myVisits.length} /></div><div className="ht-label">Total visits</div></div>
+              <div className="hero-tile glass"><div className="ht-num"><CountUp value={thisMonth} /></div><div className="ht-label">This month</div></div>
+              <div className="hero-tile glass"><div className="ht-num"><CountUp value={officesVisited} /></div><div className="ht-label">Offices visited</div></div>
+            </div>
+          </div>
         </div>
       </Reveal>
 
@@ -384,7 +407,7 @@ function StaffDashboard({ currentEmployee, visits, myVisits, sync, onNew, onOpen
           }
         />
         <div className="stat-row-group">
-          {tile(0, MessageCircle, "ico-complaint", submitted("complaint"), "Action items")}
+          {tile(0, MessageCircle, "ico-complaint", submitted("complaint"), "Issues encountered")}
           {tile(1, Users, "ico-client", submitted("interaction"), "Client interactions")}
           {tile(2, Eye, "ico-obs", submitted("observation"), "Observations")}
           {tile(3, ImageIcon, "ico-story", submitted("story"), "Stories")}
@@ -396,8 +419,8 @@ function StaffDashboard({ currentEmployee, visits, myVisits, sync, onNew, onOpen
                 <div className="kpi-foot"><Sparkline data={mySpark} color="var(--brand)" w={92} h={26} /><DeltaChip current={thisMonth} previous={lastMonth} /></div>
               </Reveal>
               <Reveal i={1} className="stat-card"><div className="stat-num"><CountUp value={todayVisits} /></div><div className="stat-label">Visits today</div></Reveal>
-              <Reveal i={2} className="stat-card"><div className="stat-num" style={{ color: "var(--danger)" }}><CountUp value={openComplaints} /></div><div className="stat-label">Open action items</div></Reveal>
-              <Reveal i={3} className="stat-card"><div className="stat-num" style={{ color: "var(--success)" }}><CountUp value={fixedComplaints} /></div><div className="stat-label">Fixed action items</div></Reveal>
+              <Reveal i={2} className="stat-card"><div className="stat-num" style={{ color: "var(--danger)" }}><CountUp value={openComplaints} /></div><div className="stat-label">Open issues</div></Reveal>
+              <Reveal i={3} className="stat-card"><div className="stat-num" style={{ color: "var(--success)" }}><CountUp value={fixedComplaints} /></div><div className="stat-label">Fixed issues</div></Reveal>
             </>
           )}
         </div>
@@ -427,12 +450,12 @@ function StaffDashboard({ currentEmployee, visits, myVisits, sync, onNew, onOpen
       </div>
 
       {/* story feed */}
-      <div className="section-gap">
+      <div className="section-gap" ref={feedRef} style={{ scrollMarginTop: 80 }}>
         <SectionHead
           eyebrow="Story feed"
           action={stories.length > STORY_PREVIEW_COUNT && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setStoriesExpanded(e => !e)}>
-              {storiesExpanded ? <>Show less <ChevronUp size={14} /></> : <>Show more <ChevronDown size={14} /></>}
+            <button className="btn btn-ghost btn-sm" onClick={storiesLeft ? showMoreStories : showFewerStories}>
+              {storiesLeft ? <>Show more <ChevronDown size={14} /></> : <>Show less <ChevronUp size={14} /></>}
             </button>
           )}
         />
@@ -445,6 +468,18 @@ function StaffDashboard({ currentEmployee, visits, myVisits, sync, onNew, onOpen
                 <StoryCard s={s} i={i} me={currentEmployee} onOpen={() => onOpenStory(s)} onLike={like} />
               </Reveal>
             ))}
+          </div>
+        )}
+        {/* the same, where the feed ends, so there's no scrolling back up for it */}
+        {stories.length > STORY_PREVIEW_COUNT && (
+          <div className="feed-more">
+            {storiesLeft ? (
+              <button className="btn btn-secondary" onClick={showMoreStories}>
+                Show {Math.min(STORY_STEP, storiesLeft)} more {Math.min(STORY_STEP, storiesLeft) === 1 ? "story" : "stories"} <span className="feed-more-n">{storiesLeft} left</span> <ChevronDown size={15} />
+              </button>
+            ) : (
+              <button className="btn btn-ghost btn-sm" onClick={showFewerStories}>Show less <ChevronUp size={14} /></button>
+            )}
           </div>
         )}
       </div>
@@ -467,7 +502,7 @@ function VisitHistory({ visits, sync, onOpen, onNew }) {
         <div>
           <p className="h-eyebrow">Visits</p>
           <h1 className="h-title">My visits</h1>
-          <p className="h-desc">{plural(visits.length, "visit")} on record. Open a visit to record action items, client interactions, observations and stories, or to mark it as done.</p>
+          <p className="h-desc">{plural(visits.length, "visit")} on record. Open a visit to record issues, client interactions, observations and stories, or to mark it as done.</p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <SyncPill sync={sync} />
@@ -539,13 +574,13 @@ function MyComplaints({ myVisits, onOpen }) {
   return (
     <div className="page">
       <div style={{ marginBottom: 18 }}>
-        <p className="h-eyebrow">Action items</p>
-        <h1 className="h-title">My action items</h1>
-        <p className="h-desc">{plural(list.length, "action item")} recorded by you · {open} open. Select an action item to view its full details and progress.</p>
+        <p className="h-eyebrow">Issues</p>
+        <h1 className="h-title">My encountered issues</h1>
+        <p className="h-desc">{plural(list.length, "issue")} recorded by you · {open} open. Select an issue to view its full details and progress.</p>
       </div>
 
       {list.length === 0 ? (
-        <div className="empty-note card card-pad">No action items recorded yet.</div>
+        <div className="empty-note card card-pad">No issues recorded yet.</div>
       ) : (
         <>
           <div className="toolbar">
@@ -564,7 +599,7 @@ function MyComplaints({ myVisits, onOpen }) {
             </div>
           </div>
 
-          {groups.length === 0 && <div className="empty-note card card-pad">No action items match.</div>}
+          {groups.length === 0 && <div className="empty-note card card-pad">No issues match.</div>}
           {groups.map(([k, label, items]) => {
             const shown = k === "Fixed" && !allFixed && filter === "all" ? items.slice(0, FIXED_PREVIEW) : items;
             return (
@@ -588,7 +623,7 @@ function MyComplaints({ myVisits, onOpen }) {
 }
 
 /* =========================== ACTION ITEM QUEUE =========================== */
-// Visible only to employees tagged "fixer": the complaints assigned to their unit's fixers.
+// Visible only to employees tagged "fixer": the complaints assigned to their unit's resolvers.
 // Any fixer of the unit can start, fix or mark a complaint long term, from its page.
 
 function FixerQueue({ me, employees, departments, visits, onOpen }) {
@@ -605,11 +640,11 @@ function FixerQueue({ me, employees, departments, visits, onOpen }) {
   return (
     <div className="page">
       <div style={{ marginBottom: 22 }}>
-        <p className="h-eyebrow">Action item queue</p>
-        <h1 className="h-title">{unitName ? `${unitName} action items` : "Assigned action items"}</h1>
+        <p className="h-eyebrow">Issue queue</p>
+        <h1 className="h-title">{unitName ? `${unitName} issues` : "Assigned issues"}</h1>
         <p className="h-desc">
-          Action items assigned to {unitName ? `the ${unitName} unit's` : "your"} fixers.
-          {teammates.length > 0 && <> Shared with {teammates.map((e) => e.name).join(", ")}; any fixer can update an action item.</>}
+          Issues assigned to {unitName ? `the ${unitName} unit's` : "your"} fixers.
+          {teammates.length > 0 && <> Shared with {teammates.map((e) => e.name).join(", ")}; any resolver can update an issue.</>}
         </p>
       </div>
 
@@ -621,7 +656,7 @@ function FixerQueue({ me, employees, departments, visits, onOpen }) {
       </div>
 
       {mine.length === 0 ? (
-        <div className="card empty-note card-pad">No action items assigned yet.</div>
+        <div className="card empty-note card-pad">No issues assigned yet.</div>
       ) : groups.filter(([, list]) => list.length).map(([label, list]) => (
         <div key={label} style={{ marginBottom: 18 }}>
           <QueueHeading label={label} count={list.length} />

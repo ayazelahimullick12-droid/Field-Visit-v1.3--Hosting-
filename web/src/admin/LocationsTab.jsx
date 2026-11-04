@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, RefreshCw, Map as MapIcon, MapPin, ListChecks, GitMerge, Copy, CloudDownload, Undo2, X } from "lucide-react";
+import { Plus, Trash2, RefreshCw, Map as MapIcon, MapPin, ListChecks, GitMerge, Copy, CloudDownload, Undo2, X, BedDouble } from "lucide-react";
 import { api } from "../lib/session";
-import { DEFAULT_PURPOSES } from "../lib/visits";
+import { DEFAULT_PURPOSES, BLCS } from "../lib/visits";
 
 /* Admin console → Locations & lists.
    Division → Region → Area → Branch all come from BRAC's branch API: the server downloads it every
@@ -19,6 +19,7 @@ const SECTIONS = [
   { key: "regions", label: "Regions", icon: MapIcon },
   { key: "areas", label: "Areas", icon: MapPin },
   { key: "purposes", label: "Purposes of visit", icon: ListChecks },
+  { key: "blcs", label: "BRAC Learning Centres", icon: BedDouble },
 ];
 
 const when = (iso) => (iso ? new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "—");
@@ -61,6 +62,7 @@ export default function LocationsTab({ structure, offices, onLocationsChanged, s
     regions: s.regions.length,
     areas: s.areas.length,
     purposes: (settings?.visitPurposes?.length ? settings.visitPurposes : DEFAULT_PURPOSES).length + 1,
+    blcs: (settings?.blcs?.length ? settings.blcs : BLCS).length,
   };
 
   return (
@@ -95,7 +97,18 @@ export default function LocationsTab({ structure, offices, onLocationsChanged, s
         <ReadOnlyList title="Areas" hint="Each area is shown once per region, holding the branches of every programme that uses the name."
           rows={s.areas} columns={[{ label: "Region", get: (a) => a.region }, { label: "Division", get: (a) => a.division }]} />
       )}
-      {section === "purposes" && <PurposesEditor settings={settings} setSettings={setSettings} showToast={showToast} />}
+      {section === "purposes" && (
+        <ListSettingEditor settings={settings} setSettings={setSettings} showToast={showToast} settingKey="visitPurposes" defaults={DEFAULT_PURPOSES}
+          title="Purposes of visit" what="purpose" placeholder="New purpose, e.g. Audit" reserved={["other"]}
+          desc={<>The choices on the visit form, in this order. <b>Other</b> is always offered last, and asks the person to type the reason. Removing a purpose doesn't change visits that already use it.</>}
+          lastRow="Other (type the reason)" />
+      )}
+      {section === "blcs" && (
+        <ListSettingEditor settings={settings} setSettings={setSettings} showToast={showToast} settingKey="blcs" defaults={BLCS}
+          title="BRAC Learning Centres" what="BLC" placeholder="New BLC, e.g. BLC Bogura"
+          desc={<>The BLCs staff can pick when they add accommodation to a visit, in this order. <b>Other BLC</b> is always offered last, so staff can type one that isn't listed. Removing a BLC doesn't change visits that already name it.</>}
+          lastRow="Other BLC (type the name)" />
+      )}
     </div>
   );
 }
@@ -335,19 +348,19 @@ function ReadOnlyList({ title, hint, rows, columns }) {
   );
 }
 
-/* ---------- Purpose of visit choices ---------- */
+/* ---------- a list the admin keeps in the app settings (purposes of visit, BLCs) ---------- */
 
-function PurposesEditor({ settings, setSettings, showToast }) {
-  const saved = settings?.visitPurposes?.length ? settings.visitPurposes : DEFAULT_PURPOSES;
+function ListSettingEditor({ settings, setSettings, showToast, settingKey, defaults, title, what, placeholder, desc, lastRow, reserved = [] }) {
+  const saved = settings?.[settingKey]?.length ? settings[settingKey] : defaults;
   const [list, setList] = useState(saved);
   const [text, setText] = useState("");
-  useEffect(() => { setList(saved); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [settings?.visitPurposes]);
+  useEffect(() => { setList(saved); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [settings?.[settingKey]]);
 
-  const persist = (next, msg) => { setList(next); setSettings({ ...(settings || {}), visitPurposes: next }); showToast(msg); };
+  const persist = (next, msg) => { setList(next); setSettings({ ...(settings || {}), [settingKey]: next }); showToast(msg); };
   const add = () => {
     const p = text.trim();
     if (!p) return;
-    if (p.toLowerCase() === "other" || list.some((x) => x.toLowerCase() === p.toLowerCase())) { showToast(`"${p}" is already on the list.`); return; }
+    if (reserved.includes(p.toLowerCase()) || list.some((x) => x.toLowerCase() === p.toLowerCase())) { showToast(`"${p}" is already on the list.`); return; }
     persist([...list, p], `"${p}" added.`);
     setText("");
   };
@@ -355,18 +368,18 @@ function PurposesEditor({ settings, setSettings, showToast }) {
 
   return (
     <div className="card card-pad">
-      <p className="analytics-card-title" style={{ marginBottom: 2 }}>Purposes of visit</p>
-      <p className="analytics-card-sub">The choices on the visit form, in this order. <b>Other</b> is always offered last, and asks the person to type the reason. Removing a purpose doesn't change visits that already use it.</p>
+      <p className="analytics-card-title" style={{ marginBottom: 2 }}>{title}</p>
+      <p className="analytics-card-sub">{desc}</p>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", margin: "8px 0 14px" }}>
-        <input className="input" style={{ flex: "1 1 240px" }} placeholder="New purpose, e.g. Audit" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} maxLength={60} />
-        <button className="btn btn-primary" onClick={add}><Plus size={14} /> Add purpose</button>
+        <input className="input" style={{ flex: "1 1 240px" }} placeholder={placeholder} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} maxLength={60} />
+        <button className="btn btn-primary" onClick={add}><Plus size={14} /> Add {what}</button>
       </div>
       <div className="ctable-wrap">
         <table className="ctable stack">
           <tbody>
             {list.map((p, i) => (
               <tr key={p}>
-                <td data-label="Purpose"><div className="cell-main">{p}</div></td>
+                <td data-label={what}><div className="cell-main">{p}</div></td>
                 <td data-label="" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   <button className="btn btn-ghost btn-sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${p} up`}>↑</button>
                   <button className="btn btn-ghost btn-sm" disabled={i === list.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${p} down`}>↓</button>
@@ -374,7 +387,7 @@ function PurposesEditor({ settings, setSettings, showToast }) {
                 </td>
               </tr>
             ))}
-            <tr><td data-label="Purpose"><div className="cell-main" style={{ color: "var(--ink-faint)" }}>Other (type the reason)</div></td><td data-label="" style={{ textAlign: "right" }}><span className="field-hint">always shown</span></td></tr>
+            <tr><td data-label={what}><div className="cell-main" style={{ color: "var(--ink-faint)" }}>{lastRow}</div></td><td data-label="" style={{ textAlign: "right" }}><span className="field-hint">always shown</span></td></tr>
           </tbody>
         </table>
       </div>

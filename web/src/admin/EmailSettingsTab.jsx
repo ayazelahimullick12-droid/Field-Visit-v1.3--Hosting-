@@ -3,7 +3,7 @@ import { Mail, Send, Save } from "lucide-react";
 import { api } from "../lib/session";
 
 /* Admin console → Email settings.
-   The account the app sends from. Fixers receive action item emails (assignment, deadline
+   The account the app sends from. Resolvers receive issue emails (assignment, deadline
    extended, deadline reminder) at the email address they registered with. The password is
    stored encrypted on the server and never shown again. */
 
@@ -51,8 +51,8 @@ export default function EmailSettingsTab({ showToast, onSent }) {
           <p className="h-eyebrow">Configuration</p>
           <h1 className="h-title">Email settings</h1>
           <p className="h-desc">
-            The email account the Field Visit Tracker sends from. Fixers get an email at their registered address when an
-            action item is assigned to their unit, when its deadline is extended, and before the deadline.
+            The email account the Field Visit Tracker sends from. Resolvers get an email at their registered address when an
+            issue is assigned to their unit, when its deadline is extended, and before the deadline.
           </p>
         </div>
       </div>

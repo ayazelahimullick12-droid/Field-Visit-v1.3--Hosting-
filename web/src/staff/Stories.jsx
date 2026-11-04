@@ -141,7 +141,7 @@ export function StorySheet({ s, me, onClose, onLike, onComment }) {
                 </div>
               ))}
               <div className="comment-new">
-                <input className="input" placeholder="Write a comment" maxLength={600} value={text} onChange={(e) => setText(e.target.value)}
+                <input className="input" placeholder="Add a comment: a kind word or a question about this story" maxLength={600} value={text} onChange={(e) => setText(e.target.value)}
                        onKeyDown={(e) => { if (e.key === "Enter") post(); }} />
                 <button className="btn btn-primary" onClick={post} disabled={!text.trim() || busy}><Send size={14} /> Post</button>
               </div>

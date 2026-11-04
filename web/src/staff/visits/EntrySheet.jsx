@@ -7,7 +7,7 @@ import { UNDEFINED_UNIT, ENTRY_TYPES, OFFICE_KIND_LABEL, placePath, placeOfStop,
 import { statusOf, statusClass, complaintTitle } from "../../lib/complaints";
 import PhotoUpload from "./PhotoUpload";
 import { VoiceNoteField, VoicePlayer } from "./VoiceNote";
-import { OfficeSelector } from "./Places";
+import { EntryPlacePicker } from "./OfficeSearch";
 import ConfirmDialog from "./Confirm";
 import Portal from "../../lib/Portal";
 import Resolution from "../../lib/Resolution";
@@ -39,7 +39,7 @@ export function defaultPlaces(v, type) {
   const last = (v.lastPlaces || (v.lastPlace?.office ? [v.lastPlace] : [])).filter((p) => allowedPlace(type, p));
   const offices = (list) => list.filter((p) => p.officeKind !== "vo").length;
   if (last.length && !(ONE_OFFICE.includes(type) && offices(last) > 1)) return last;
-  const planned = (v.stops || []).map((s) => placeOfStop(s, v)).filter((p) => allowedPlace(type, p));
+  const planned = (v.stops || []).filter((s) => !s.skipped).map((s) => placeOfStop(s, v)).filter((p) => allowedPlace(type, p));
   return planned.length === 1 ? planned : [];
 }
 
@@ -89,10 +89,10 @@ export function whyNotReady(type, d, departments) {
   else if (type === "interaction") {
     if (!said && !Object.values(d.ratings).some((n) => n > 0)) return "Record the client's feedback or rate at least one question.";
   } else {
-    if (!(d.title || "").trim()) return "Enter a title for the action item.";
+    if (!(d.title || "").trim()) return "Enter a title for the issue.";
     if (!said) return "Enter a description or record a voice note.";
     if (!d.department) return `Select a ${lower(TERMS.unit)}. Choose ${UNDEFINED_UNIT} if unsure.`;
-    // an action item is about exactly one office (regional, area or branch), optionally a VO under its branch
+    // an issue is about exactly one office (regional, area or branch), optionally a VO under its branch
     if ((d.places || []).filter((p) => p.officeKind !== "vo").length > 1) return "Select only one office.";
   }
   if (!(d.places || []).length) return type === "interaction" ? "Select the branch office or VO." : ONE_OFFICE.includes(type) ? "Select the office." : "Select at least one office.";
@@ -138,7 +138,7 @@ export function VisitContext({ visit }) {
  * A new entry or a draft: a complaint, a client interaction, an observation or a story, recorded
  * against one visit. Closing keeps it as a draft; Submit (after confirmation) sends it and locks it.
  */
-export default function EntrySheet({ type, entry, visit, tree, departments, questions, onSave, onDelete, onClose, showToast }) {
+export default function EntrySheet({ type, entry, visit, departments, questions, onSave, onDelete, onClose, showToast }) {
   const start = useMemo(() => draftFrom(type, entry, defaultPlaces(visit, type)), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [d, setD] = useState(start);
   const [whoOpen, setWhoOpen] = useState(() => hasPerson(entry?.person));
@@ -215,9 +215,8 @@ export default function EntrySheet({ type, entry, visit, tree, departments, ques
   const location = (
     <fieldset className="form-sec" ref={placeRef}>
       <legend><MapPin size={14} /> {type === "interaction" ? "Branch office / VO" : "Office"} {req}</legend>
-      <OfficeSelector tree={tree} division={visit.division} region={visit.region} area={visit.area}
-                      value={d.places} onChange={(places) => set({ places })} kinds={ENTRY_KINDS[type]} single={ONE_OFFICE.includes(type)} idPrefix="entry" />
-      <p className="field-hint" style={{ marginBottom: 0 }}>{ONE_OFFICE.includes(type) ? "Select one office: a regional, area or branch office. A VO can be added under a branch office. " : ""}Offices are listed for the visit area ({[visit.region, visit.area].filter(Boolean).join(" · ") || "not set"}). To change the area, use <b>Change</b> on the visit details.</p>
+      <EntryPlacePicker visit={visit} kinds={ENTRY_KINDS[type]} single={ONE_OFFICE.includes(type)} value={d.places} onChange={(places) => set({ places })} idPrefix="entry" />
+      <p className="field-hint" style={{ marginBottom: 0 }}>{ONE_OFFICE.includes(type) ? "Select one office: a regional, area or branch office. A VO can be added under a branch office. " : "Select the branch office, and a VO under it if the client is from one. "}The offices on this visit are listed; use <b>Another office</b> for one that isn't.</p>
     </fieldset>
   );
 
@@ -228,12 +227,12 @@ export default function EntrySheet({ type, entry, visit, tree, departments, ques
     body = (
       <>
         <fieldset className="form-sec">
-          <legend>Action item details</legend>
+          <legend>Issue details</legend>
           <div className="field-group">
             <label className="field-label" htmlFor="entry-title">Title {req}</label>
-            <input id="entry-title" className="input" maxLength={120} placeholder="Short summary, e.g. Loan disbursement delayed" value={d.title} onChange={(e) => set({ title: e.target.value })} />
+            <input id="entry-title" className="input" maxLength={120} placeholder="One line on what is wrong, e.g. Loan disbursement delayed by two weeks" value={d.title} onChange={(e) => set({ title: e.target.value })} />
           </div>
-          {description("Description", "Describe the issue in detail")}
+          {description("Description", "What is wrong, who it affects, since when, and what you saw or were told. The more specific, the faster it can be resolved.")}
           <div className="field-group">
             <label className="field-label">Urgency</label>
             <div className="seg">
@@ -286,18 +285,18 @@ export default function EntrySheet({ type, entry, visit, tree, departments, ques
           )}
           <label className="consent-row" style={{ marginBottom: 0 }}>
             <input type="checkbox" checked={d.consent} onChange={(e) => set({ consent: e.target.checked })} />
-            <span>Consent to follow-up contact<small>Used only for this action item.</small></span>
+            <span>Consent to follow-up contact<small>Used only for this issue.</small></span>
           </label>
         </fieldset>
       </>
     );
-    info = "An action item is sent to the admin as soon as it is submitted. Until then it is a draft visible only to you.";
+    info = "An issue is sent to the admin as soon as it is submitted. Until then it is a draft visible only to you.";
   } else if (type === "interaction") {
     body = (
       <>
         <fieldset className="form-sec">
           <legend>Client feedback</legend>
-          {description("Feedback", "Summary of the client's feedback", false)}
+          {description("Feedback", "What the client told you, in their own words where you can: what works for them, what doesn't, and anything they asked for", false)}
           <div className="field-group" style={{ marginBottom: 0 }}>
             <label className="field-label">Ratings {optional("(set by the admin; skip any)")}</label>
             {activeQuestions.length === 0 ? (
@@ -326,7 +325,7 @@ export default function EntrySheet({ type, entry, visit, tree, departments, ques
       <>
         <fieldset className="form-sec">
           <legend>Observation</legend>
-          {description("Observation", "Describe what was observed")}
+          {description("Observation", "What you noticed and where, e.g. the cash book had not been reconciled for three days")}
           {photo()}
         </fieldset>
         <fieldset className="form-sec">
@@ -347,11 +346,11 @@ export default function EntrySheet({ type, entry, visit, tree, departments, ques
         <legend>Story</legend>
         <div className="field-group">
           <label className="field-label" htmlFor="entry-title">Title {req}</label>
-          <input id="entry-title" className="input" maxLength={120} placeholder="Story title" value={d.title} onChange={(e) => set({ title: e.target.value })} />
+          <input id="entry-title" className="input" maxLength={120} placeholder="A short headline, e.g. Rina's tailoring shop now employs three women" value={d.title} onChange={(e) => set({ title: e.target.value })} />
         </div>
         <div className="field-group">
           <label className="field-label" htmlFor="entry-caption">Description {req}</label>
-          <textarea id="entry-caption" className="textarea" placeholder="Tell the story" value={d.caption} onChange={(e) => set({ caption: e.target.value })} />
+          <textarea id="entry-caption" className="textarea" placeholder="Tell it as you would to a colleague: who it is about, what changed for them, and why it matters" value={d.caption} onChange={(e) => set({ caption: e.target.value })} />
         </div>
         <div className="field-group">
           <label className="field-label">Picture {optional()}</label>
@@ -359,7 +358,7 @@ export default function EntrySheet({ type, entry, visit, tree, departments, ques
         </div>
         <div className="field-group" style={{ marginBottom: 0 }}>
           <label className="field-label" htmlFor="entry-location">Location {optional()}</label>
-          <input id="entry-location" className="input" maxLength={160} placeholder="e.g. Mirpur Branch, VO-142" value={d.locationText} onChange={(e) => set({ locationText: e.target.value })} />
+          <input id="entry-location" className="input" maxLength={160} placeholder="Where it happened, e.g. Mirpur branch, VO-142" value={d.locationText} onChange={(e) => set({ locationText: e.target.value })} />
         </div>
       </fieldset>
     );

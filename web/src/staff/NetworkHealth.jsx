@@ -58,7 +58,7 @@ export default function NetworkHealth({ visits, offices, settings, onOpenBranch,
                    spark={health.ratingSpark} sparkColor="var(--warning)" />
             </Reveal>
             <Reveal i={5}><Kpi icon={ShieldCheck} tone="green" label={`Info completeness (last ${target}d)`} value={health.quality == null ? "—" : Math.round(health.quality * 100)} suffix={health.quality == null ? "" : "%"} /></Reveal>
-            <Reveal i={6}><Kpi icon={CheckCircle2} tone="green" label="Action items resolved" value={health.resolvedPct} suffix="%" foot={<span className="pill pill-brand">{health.open} open</span>} /></Reveal>
+            <Reveal i={6}><Kpi icon={CheckCircle2} tone="green" label="Issues resolved" value={health.resolvedPct} suffix="%" foot={<span className="pill pill-brand">{health.open} open</span>} /></Reveal>
           </div>
         </div>
       </div>

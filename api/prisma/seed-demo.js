@@ -7,7 +7,7 @@
  * console): the demo visits go to those offices, by office id. The script adds demo units and
  * teams (only those missing), four client rating questions, demo staff (ids EMP-DM-..., emails at
  * example.com so no mail reaches a real person) and about six months of visits up to today, with
- * client interactions, observations, action items at every stage and stories.
+ * client interactions, observations, issues at every stage and stories.
  *
  * The staff password is DEMO_PASSWORD, or a new one printed at the end. Writes to the database
  * in DATABASE_URL (api/.env, or the shell's variable, which wins). Plain JavaScript.
@@ -58,7 +58,7 @@ async function loadLocations() {
   for (const b of branches) for (const p of b.placements || [{ division: b.division, region: b.region, area: b.area }]) {
     const k = key(p.division, p.region, p.area);
     if (!areas.has(k)) areas.set(k, { division: p.division, region: p.region, area: p.area, branches: [] });
-    areas.get(k).branches.push({ id: b.id, name: b.name, division: p.division, region: p.region, area: p.area });
+    areas.get(k).branches.push({ id: b.id, name: b.name, code: b.code, division: p.division, region: p.region, area: p.area });
   }
   const count = {};
   for (const a of areas.values()) count[a.division] = (count[a.division] || 0) + a.branches.length;
@@ -257,7 +257,7 @@ function stayFor(place) {
   if (blc && chance(0.7)) return { name: pick(blc[1]), type: 'BRAC Learning Centre (BLC)' };
   return pick([{ name: 'BRAC guest house', type: 'Guest house' }, { name: 'Hotel near the area office', type: 'Hotel' }]);
 }
-const PURPOSES = ['Monitoring', 'Monitoring', 'Monitoring', 'Onboarding', 'Training', 'Action item resolution', 'Survey'];
+const PURPOSES = ['Monitoring', 'Monitoring', 'Monitoring', 'Onboarding', 'Training', 'Issue resolution', 'Survey'];
 
 // ---------------- visits ----------------
 
@@ -296,7 +296,7 @@ function makeVisits({ loc, staff, units, now }) {
       const area = pick(myAreas);
       const branches = sample(area.branches, int(2, 4));
       if (!branches.length) continue;
-      const stops = branches.map((b) => ({ kind: 'branch', name: b.name, officeId: b.id, division: b.division, region: b.region, area: b.area }));
+      const stops = branches.map((b) => ({ kind: 'branch', name: b.name, officeId: b.id, ...(b.code ? { code: b.code } : {}), division: b.division, region: b.region, area: b.area }));
       const ao = loc.areaOffice.get(`${area.division}|${area.region}|${area.area}`);
       const ro = loc.regionOffice.get(`${area.division}|${area.region}`);
       if (ao && chance(0.3)) stops.push({ kind: 'office', name: ao.name, officeId: ao.id, division: ao.division, region: ao.region, area: ao.area || '' });
@@ -349,7 +349,7 @@ function makeVisits({ loc, staff, units, now }) {
           }));
         }
 
-        // action items
+        // issues
         for (let n = pick([0, 0, 1, 1, 1, 2]); n > 0; n--) {
           const b = pick(branches);
           const unit = pick(units);
@@ -387,7 +387,7 @@ function makeVisits({ loc, staff, units, now }) {
   return { visits, emails };
 }
 
-/** Moves a submitted action item along the admin → fixer workflow, as far as its age allows. */
+/** Moves a submitted issue along the admin → fixer workflow, as far as its age allows. */
 function progress(c, visit, unit, staff, now, emails) {
   const fixers = staff.fixers.filter((f) => f.departmentId === unit.id).map((f) => ({ id: f.id, name: f.name, email: f.email }));
   const head = staff.heads.find((h) => h.departmentId === unit.id);
@@ -395,7 +395,7 @@ function progress(c, visit, unit, staff, now, emails) {
   Object.assign(c, {
     status: 'Waiting', statusModel: 2, filedBy: visit.employeeName, visitId: visit.id, filedDate: c.submittedAt.slice(0, 10),
     assignedTo: null, supervisor: null, deadline: null, escalationApproved: false, resolutionNotes: null,
-    log: [{ label: 'Action item submitted', time: logTime(c.submittedAt) }],
+    log: [{ label: 'Issue submitted', time: logTime(c.submittedAt) }],
   });
   const age = (now - new Date(c.submittedAt)) / DAY;
   const r = rand();
@@ -415,13 +415,13 @@ function progress(c, visit, unit, staff, now, emails) {
     deadlineHistory: [{ deadline, setAt: assignedAt, days, type: 'initial' }],
   });
   c.log.push(
-    { label: `Assigned to the ${unit.name} fixers: ${names} (${unit.name}${c.unit ? ` · ${c.unit}` : ''}) — ${days} day(s) given, deadline ${logTime(deadline)}`, time: logTime(assignedAt) },
+    { label: `Assigned to the ${unit.name} resolvers: ${names} (${unit.name}${c.unit ? ` · ${c.unit}` : ''}) — ${days} day(s) given, deadline ${logTime(deadline)}`, time: logTime(assignedAt) },
     { label: `Assignment email sent to ${names}`, time: logTime(assignedAt) },
   );
   for (const f of fixers) emails.push({
     id: `MAIL-DM-${emails.length + 1}`, complaintId: c.id, to: f.email, toName: f.name, type: 'assignment',
-    subject: `[Field Visit Tracker] ${c.urgency} urgency — New action item assigned: ${c.id}`,
-    body: `Hello,\n\nA new action item has been assigned to the ${unit.name} Unit.\n\nAction item ID: ${c.id}\nTitle: ${c.title}\nUnit: ${unit.name}\nTeam: ${c.unit}\nDescription: ${c.description}\nUrgency: ${c.urgency}\nFiled by: ${c.filedBy} (${c.source})\nFiled on: ${c.filedDate}\nOffice: ${c.place.office} (${c.place.division} › ${c.place.region} › ${c.place.area})\nRelated visit: ${visit.id} on ${visit.date}`,
+    subject: `[Field Visit Tracker] ${c.urgency} urgency — New issue assigned: ${c.id}`,
+    body: `Hello,\n\nA new issue has been assigned to the ${unit.name} Unit.\n\nIssue ID: ${c.id}\nTitle: ${c.title}\nUnit: ${unit.name}\nTeam: ${c.unit}\nDescription: ${c.description}\nUrgency: ${c.urgency}\nFiled by: ${c.filedBy} (${c.source})\nFiled on: ${c.filedDate}\nOffice: ${c.place.office} (${c.place.division} › ${c.place.region} › ${c.place.area})\nRelated visit: ${visit.id} on ${visit.date}`,
     status: 'not-sent', error: 'Demo data (never sent).', sentAt: new Date(assignedAt),
   });
   if (goal === 'Assigned') return;
@@ -485,7 +485,7 @@ async function main() {
   const by = items.reduce((m, c) => ((m[c.status || 'Draft'] = (m[c.status || 'Draft'] || 0) + 1), m), {});
   console.log(`Staff: ${staff.all.length} (${staff.field.length} visitors, ${staff.management.length + staff.heads.length} management, ${staff.fixers.length} fixers).`);
   console.log(`Visits: ${visits.length} (${visits.filter((v) => v.status === 'done').length} done), with ${visits.reduce((s, v) => s + v.interactions.length, 0)} client interactions, ${visits.reduce((s, v) => s + v.observations.length, 0)} observations, ${visits.reduce((s, v) => s + v.stories.length, 0)} stories.`);
-  console.log(`Action items: ${items.length} — ${Object.entries(by).map(([k, n]) => `${n} ${k}`).join(', ')}. Emails logged (not sent): ${emails.length}.`);
+  console.log(`Issues: ${items.length} — ${Object.entries(by).map(([k, n]) => `${n} ${k}`).join(', ')}. Emails logged (not sent): ${emails.length}.`);
   console.log('\nSign in to the staff app with any of these PINs:');
   for (const p of staff.all) console.log(`  ${p.pin}  ${p.name.padEnd(18)} ${p.roles.join(' + ')}${p.home ? ` (${p.home})` : p.departmentId ? ` (${p.department})` : ''}`);
   console.log(process.env.DEMO_PASSWORD ? '\nPassword: the DEMO_PASSWORD you set.' : `\nPassword for all of them: ${password}`);

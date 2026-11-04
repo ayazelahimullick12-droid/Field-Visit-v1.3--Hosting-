@@ -103,6 +103,7 @@ export function personStats(person, trips, records, range) {
     trips: inP.length,
     done: inP.filter((v) => v.status === "done").length,
     notDone: inP.filter((v) => phaseOf(v) === "due").length,
+    upcoming: mine.filter((v) => phaseOf(v) === "upcoming").length,
     offices: new Set(recs.map((r) => r.location)).size,
     entries: byType,
     entryCount: submitted.length,

@@ -1,7 +1,7 @@
 // Complaint statuses, shared by the staff app, the admin console and the analytics.
 //
 //   Waiting      submitted, not yet assigned by the admin
-//   Assigned     the admin assigned it to a unit's fixers and set a deadline
+//   Assigned     the admin assigned it to a unit's resolvers and set a deadline
 //   In Progress  one of the fixers has started work on it
 //   Fixed        a fixer marked it fixed (optionally saying what was done)
 //   Long Term    a fixer marked it as needing longer-term work; no deadline reminders
@@ -12,9 +12,9 @@
 export const STATUSES = ["Waiting", "Assigned", "In Progress", "Fixed", "Long Term"];
 export const STATUS_HELP = {
   Waiting: "Submitted and awaiting assignment by the admin.",
-  Assigned: "Assigned to the unit's fixers, with a deadline.",
-  "In Progress": "A fixer is working on it.",
-  Fixed: "Marked fixed by a fixer.",
+  Assigned: "Assigned to the unit's resolvers, with a deadline.",
+  "In Progress": "A resolver is working on it.",
+  Fixed: "Marked fixed by a resolver.",
   "Long Term": "Needs longer-term work; tracked without a deadline.",
 };
 export const STATUS_COLORS = {
@@ -41,4 +41,4 @@ export function firstWords(text, n) {
   return words.length > n ? `${words.slice(0, n).join(" ")}…` : words.join(" ");
 }
 /** The complaint's title, or the start of its description for older complaints without one. */
-export const complaintTitle = (c) => (c?.title || "").trim() || firstWords(c?.description, 8) || (c?.voice ? "Voice note action item" : "Untitled action item");
+export const complaintTitle = (c) => (c?.title || "").trim() || firstWords(c?.description, 8) || (c?.voice ? "Voice note issue" : "Untitled issue");

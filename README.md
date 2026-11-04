@@ -115,13 +115,12 @@ the last one, is refused. Offices the API stops listing are switched off, never 
 refer to offices by id, so they follow a branch the API moves. Without access to the API, load a
 saved copy: `npm run db:locations -- branches.json` (after `npm run build`).
 
-On the visit form, staff pick Division → Region → Area, then:
-
-| Picker | Shows |
-|---|---|
-| Regional Office | the Regional Offices of the chosen Division |
-| Area Office | the Area Offices of the chosen Region |
-| Branch Office | the branches of the chosen Area |
+On the visit form, staff add the offices they're visiting one by one, like the stops of a trip
+(`web/src/staff/visits/OfficeSearch.jsx`): search by name or branch code (spelling-tolerant), narrow
+by type (branch, area or regional office) if they like, or paste several codes separated by commas.
+Offices that share a name show their code and area. On the visit page a stop can be marked
+**Couldn't visit** (with a reason; it then doesn't count as visited) and a **stop on the way** added.
+Entries pick their office from the visit's stops, or search another.
 
 The coverage maps are switched off (`maps` in `web/src/lib/features.js`): BRAC's divisions and
 regions have no map outlines and the API has no coordinates.
@@ -129,13 +128,13 @@ regions have no map outlines and the API has no coordinates.
 ## How emails work
 
 The admin sets the sending account in **Admin console → Email settings** (the password is stored
-encrypted with `APP_SECRET`). Emails go to the **fixers of the unit** an action item is assigned to,
-at the email address each fixer registered with:
+encrypted with `APP_SECRET`). Emails go to the **resolvers of the unit** an issue is assigned to,
+at the email address each resolver registered with:
 
 | When | Email |
 |---|---|
-| Admin assigns an action item to a unit | "New action item assigned" to every fixer in the unit |
-| Admin extends the deadline | "Deadline extended" to the unit's fixers |
+| Admin assigns an issue to a unit | "New issue assigned" to every resolver in the unit |
+| Admin extends the deadline | "Deadline extended" to the unit's resolvers |
 | 48 h before the deadline (24 h for short deadlines) | "Reminder" (checked every 5 minutes) |
 
 Every email, with its status (Sent / Failed + reason / Not sent), is listed in **Sent emails**.
@@ -144,9 +143,9 @@ Every email, with its status (Sent / Failed + reason / Not sent), is listed in *
 
 | Type | Signs in at | Can |
 |---|---|---|
-| Base user | `/` → User | register visits; record action items, client interactions, observations, stories |
-| Fixer | `/` → User | + Action item queue for their unit (start, fixed, long term) |
-| Management | `/` → User | + Management section (Summary always; Offices/People/Analytics if switched on in Admin → Features) |
+| Base user | `/` → User | register visits; record issues, client interactions, observations, stories |
+| Resolver | `/` → User | + Issue queue for their unit (start, fixed, long term) |
+| Management | `/` → User | + Management section: Overview (needs your attention + the programme in charts), Offices, People, Departments, with one time and place filter for all of them |
 | Admin | `/` → Admin | admin console |
 
 Everyone signs in with **PIN + password** (passwords stored hashed). The session is an http-only

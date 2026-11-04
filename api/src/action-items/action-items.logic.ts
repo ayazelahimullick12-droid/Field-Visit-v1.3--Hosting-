@@ -1,5 +1,5 @@
 /**
- * The action item workflow, as plain functions over one action item (stored as a "complaint"
+ * The issue workflow, as plain functions over one issue (stored as a "complaint"
  * on its visit). They change the item in place and return the emails to send; the service
  * (action-items.service.ts) loads, locks and saves the visit around them.
  *
@@ -66,15 +66,15 @@ function raisedByLine(c: any) {
   return `Raised by (${c.source}): ${details}${c.consent === false ? ' — did NOT consent to follow-up' : ''}`;
 }
 
-/** "[Field Visit Tracker] High urgency — New action item assigned: FC-ABC123" */
+/** "[Field Visit Tracker] High urgency — New issue assigned: FC-ABC123" */
 const subjectFor = (c: any, what: string) =>
   `[Field Visit Tracker] ${c.urgency ? `${c.urgency} urgency — ` : ''}${what}: ${c.id}`;
 
-/** The details block at the bottom of every action item email. */
+/** The details block at the bottom of every issue email. */
 function detailBlock(c: any, visit: any) {
   const where = c.place ? ` (${[c.place.division, c.place.region, c.place.area].filter(Boolean).join(' › ')})` : '';
   return [
-    `Action item ID: ${c.id}`,
+    `Issue ID: ${c.id}`,
     ...(c.title ? [`Title: ${c.title}`] : []),
     `Unit: ${c.department}`,
     ...(c.unit ? [`Team: ${c.unit}`] : []),
@@ -104,19 +104,19 @@ function setDeadline(c: any, days: number, type: 'initial' | 'extension') {
 
 // ---------- admin ----------
 
-/** Admin assigns an item to a unit's fixers and gives them `days` to fix it. */
+/** Admin assigns an item to a unit's resolvers and gives them `days` to fix it. */
 export function assign(ctx: Ctx, c: any, visit: any, { departmentId, unit, days }: any): EmailDraft[] {
   let dept;
   // "Undefined" means the person filing wasn't sure: the admin picks the real unit
   if (c.department === 'Undefined' || c.department === 'Other' || departmentId) {
     dept = findDept(ctx, departmentId);
-    if (!dept) throw new Error('A valid unit must be chosen for this action item');
+    if (!dept) throw new Error('A valid unit must be chosen for this issue');
   } else {
     dept = findDept(ctx, c.department);
     if (!dept) throw new Error(`No unit matches "${c.department}" — choose one explicitly`);
   }
   const fixers = unitFixers(ctx, dept.id);
-  if (!fixers.length) throw new Error(`No fixer is set up in the "${dept.name}" unit yet`);
+  if (!fixers.length) throw new Error(`No resolver is set up in the "${dept.name}" unit yet`);
   const supervisors = supervisorsOf(ctx, fixers);
   const daysNum = Number(days) || 1;
 
@@ -137,20 +137,20 @@ export function assign(ctx: Ctx, c: any, visit: any, { departmentId, unit, days 
   c.statusModel = 2;
   const deadline = setDeadline(c, daysNum, 'initial');
 
-  addLog(c, `Assigned to the ${dept.name} fixers: ${names(fixers)} (${dept.name}${c.unit ? ` · ${c.unit}` : ''}) — ${daysNum} day(s) given, deadline ${deadline.toLocaleString()}`);
+  addLog(c, `Assigned to the ${dept.name} resolvers: ${names(fixers)} (${dept.name}${c.unit ? ` · ${c.unit}` : ''}) — ${daysNum} day(s) given, deadline ${deadline.toLocaleString()}`);
   addLog(c, `Assignment email sent to ${names(fixers)}`);
 
   return emailEach(fixers, () => ({
     complaintId: c.id,
     type: 'assignment',
-    subject: subjectFor(c, 'New action item assigned'),
-    body: `Hello,\n\nA new action item has been assigned to the ${dept.name} Unit.\n\n` + detailBlock(c, visit),
+    subject: subjectFor(c, 'New issue assigned'),
+    body: `Hello,\n\nA new issue has been assigned to the ${dept.name} Unit.\n\n` + detailBlock(c, visit),
   }));
 }
 
 /** Admin gives more time. */
 export function extend(ctx: Ctx, c: any, visit: any, { days }: any): EmailDraft[] {
-  if (!c.assignedEmployeeId) throw new Error('Action item has not been assigned yet');
+  if (!c.assignedEmployeeId) throw new Error('Issue has not been assigned yet');
   const daysNum = Number(days) || 1;
   const deadline = setDeadline(c, daysNum, 'extension');
   addLog(c, `Deadline extended by the admin — ${daysNum} more day(s), new deadline ${deadline.toLocaleString()}`);
@@ -158,24 +158,24 @@ export function extend(ctx: Ctx, c: any, visit: any, { days }: any): EmailDraft[
     complaintId: c.id,
     type: 'extension',
     subject: subjectFor(c, 'Deadline extended'),
-    body: `Hello,\n\nThe deadline for the action item below has been extended by ${daysNum} day(s). New deadline: ${deadline.toLocaleString()}.\n\n` + detailBlock(c, visit),
+    body: `Hello,\n\nThe deadline for the issue below has been extended by ${daysNum} day(s). New deadline: ${deadline.toLocaleString()}.\n\n` + detailBlock(c, visit),
   }));
 }
 
 // ---------- fixers ----------
 
-/** Only a fixer of the unit an item is assigned to can move it along. */
+/** Only a resolver of the unit an item is assigned to can move it along. */
 function checkFixer(ctx: Ctx, c: any, employeeId: string) {
   const me = ctx.employees.find((e) => e.id === employeeId);
   if (!me) throw new Error('Unknown employee');
   const allowed =
     currentFixers(ctx, c).some((f) => f.id === me.id) || (c.assignees || []).some((f: any) => f.id === me.id) || c.assignedEmployeeId === me.id;
-  if (!allowed) throw new Error('Only a fixer of the unit this action item is assigned to can update it');
+  if (!allowed) throw new Error('Only a resolver of the unit this issue is assigned to can update it');
   return me;
 }
 
 export function start(ctx: Ctx, c: any, employeeId: string) {
-  if (c.status !== 'Assigned') throw new Error(`This action item is ${c.status}, so it can't be started`);
+  if (c.status !== 'Assigned') throw new Error(`This issue is ${c.status}, so it can't be started`);
   const me = checkFixer(ctx, c, employeeId);
   c.status = 'In Progress';
   c.startedAt = nowIso();
@@ -184,7 +184,7 @@ export function start(ctx: Ctx, c: any, employeeId: string) {
 }
 
 export function longTerm(ctx: Ctx, c: any, employeeId: string, note?: string) {
-  if (!['Assigned', 'In Progress'].includes(c.status)) throw new Error(`This action item is ${c.status}, so it can't be marked Long Term`);
+  if (!['Assigned', 'In Progress'].includes(c.status)) throw new Error(`This issue is ${c.status}, so it can't be marked Long Term`);
   const me = checkFixer(ctx, c, employeeId);
   const text = String(note || '').trim().slice(0, 1000);
   c.status = 'Long Term';
@@ -195,7 +195,7 @@ export function longTerm(ctx: Ctx, c: any, employeeId: string, note?: string) {
 }
 
 export function fixed(ctx: Ctx, c: any, employeeId: string, note?: string, photoUrl?: string) {
-  if (!['Assigned', 'In Progress', 'Long Term'].includes(c.status)) throw new Error(`This action item is ${c.status}, so it can't be marked Fixed`);
+  if (!['Assigned', 'In Progress', 'Long Term'].includes(c.status)) throw new Error(`This issue is ${c.status}, so it can't be marked Fixed`);
   const me = checkFixer(ctx, c, employeeId);
   const text = String(note || '').trim().slice(0, 1000);
   c.status = 'Fixed';
@@ -222,7 +222,7 @@ export function reminderDue(ctx: Ctx, c: any, visit: any, now = new Date()): Ema
     complaintId: c.id,
     type: 'reminder',
     subject: subjectFor(c, 'Deadline reminder'),
-    body: `Hello,\n\nThis is a reminder that the deadline for the action item below is ${deadline.toLocaleString()}.\n\n` + detailBlock(c, visit),
+    body: `Hello,\n\nThis is a reminder that the deadline for the issue below is ${deadline.toLocaleString()}.\n\n` + detailBlock(c, visit),
   }));
 }
 

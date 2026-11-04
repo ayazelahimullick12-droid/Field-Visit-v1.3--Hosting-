@@ -182,7 +182,7 @@ export default function AuthScreen({
         {footerExtra}
 
         <p className="login-footer">
-          Use your work email: action item emails are sent there if you become a fixer.
+          Use your work email: issue emails are sent there if you become a resolver.
 
         </p>
       </div>

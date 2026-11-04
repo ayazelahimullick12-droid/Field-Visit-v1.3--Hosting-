@@ -53,7 +53,7 @@ export default function ComplaintPage({ c, visit, me, canAct, onBack, onRefresh,
 
       <div className="card card-pad cpage-head">
         <p className="h-eyebrow" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          Action item · <span className="mono">{c.id}</span>
+          Issue · <span className="mono">{c.id}</span>
           {c.state === "draft" ? <span className="pill pill-stale">Draft · not submitted</span> : <span className={statusClass(c)}>{status}</span>}
           {late && <span className="pill pill-never">Past deadline</span>}
         </p>
@@ -83,7 +83,7 @@ export default function ComplaintPage({ c, visit, me, canAct, onBack, onRefresh,
             <p className="analytics-card-title">Description</p>
             {c.description ? <p className="view-text" style={{ marginTop: 6 }}>{c.description}</p> : <p className="field-hint">No written description.</p>}
             {c.voice && <VoicePlayer voice={c.voice} />}
-            {c.photoUrl && <img className="view-photo" src={c.photoUrl} alt="Attached to the action item" style={{ marginTop: 10 }} />}
+            {c.photoUrl && <img className="view-photo" src={c.photoUrl} alt="Attached to the issue" style={{ marginTop: 10 }} />}
           </section>
           {status === "Long Term" && (
             <div className="info-banner"><Info size={16} /><span><b>Marked long term{c.longTermBy ? ` by ${c.longTermBy}` : ""}{c.longTermAt ? ` on ${new Date(c.longTermAt).toLocaleDateString()}` : ""}.</b>{c.longTermNote ? ` ${c.longTermNote}` : ""}</span></div>
@@ -112,7 +112,7 @@ export default function ComplaintPage({ c, visit, me, canAct, onBack, onRefresh,
               <button className="link-btn" onClick={onOpenVisit}>{[visit.area || visit.region, visit.date && fmtDate(visit.date)].filter(Boolean).join(" · ") || visit.id}</button>
             </Row>
             <Row k="Filed by">{[c.filedBy || visit.employeeName, c.filedDate].filter(Boolean).join(" · ")}</Row>
-            <Row k={<><Users size={13} /> Assigned to</>}>{c.assignedTo ? `${c.department} fixers: ${c.assignedTo}` : "Not yet assigned"}</Row>
+            <Row k={<><Users size={13} /> Assigned to</>}>{c.assignedTo ? `${c.department} resolvers: ${c.assignedTo}` : "Not yet assigned"}</Row>
             <Row k={<><Clock size={13} /> Deadline</>}>{c.deadline ? <span style={late ? { color: "var(--danger)", fontWeight: 700 } : undefined}>{new Date(c.deadline).toLocaleString()}{late ? " · past deadline" : ""}</span> : null}</Row>
             {c.startedBy && <Row k="Work started">{`${c.startedBy}${c.startedAt ? ` · ${new Date(c.startedAt).toLocaleDateString()}` : ""}`}</Row>}
           </section>
@@ -128,7 +128,7 @@ export default function ComplaintPage({ c, visit, me, canAct, onBack, onRefresh,
                        onCancel={() => setDialog(null)} onConfirm={() => run("resolve-complaint", { note: dialog.note, photoUrl: dialog.photo }, `${c.id} marked as fixed.`)}>
           <p style={{ margin: "0 0 12px" }}>Both fields are optional, but they show everyone what was done.</p>
           <label className="field-label" htmlFor="fix-note">Action taken</label>
-          <textarea id="fix-note" className="textarea" rows={3} maxLength={1000} placeholder="e.g. Replaced the faulty router; connectivity restored."
+          <textarea id="fix-note" className="textarea" rows={3} maxLength={1000} placeholder="What was done to resolve it, e.g. replaced the faulty router; the branch is back online"
                     value={dialog.note} onChange={(e) => setDialog({ ...dialog, note: e.target.value })} />
           <div style={{ marginTop: 12 }}>
             <PhotoUpload photoUrl={dialog.photo} onChange={(photo) => setDialog((d) => ({ ...d, photo }))} hint="Photo of the fix (optional)" />
@@ -140,7 +140,7 @@ export default function ComplaintPage({ c, visit, me, canAct, onBack, onRefresh,
                        onCancel={() => setDialog(null)} onConfirm={() => run("long-term-complaint", { note: dialog.note }, `${c.id} marked as long term.`)}>
           <p style={{ margin: "0 0 12px" }}>Use this when the fix needs more time than a normal deadline allows. Deadline reminders stop; it can be marked fixed later.</p>
           <label className="field-label" htmlFor="lt-note">Reason <span className="opt">(optional)</span></label>
-          <textarea id="lt-note" className="textarea" rows={3} maxLength={1000} placeholder="e.g. Requires budget approval for new equipment."
+          <textarea id="lt-note" className="textarea" rows={3} maxLength={1000} placeholder="Why it needs more time and what it is waiting for, e.g. budget approval for a new generator"
                     value={dialog.note} onChange={(e) => setDialog({ ...dialog, note: e.target.value })} />
         </ConfirmDialog>
       )}

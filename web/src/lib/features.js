@@ -11,12 +11,11 @@ export const FEATURES = {
   maps: false,
 };
 
-// The Management section's tabs. Summary is always shown; an admin switches each of the others on
-// individually (Admin console → Features). They are stored in settings.managementTabs and are off
-// until switched on.
-export const MANAGEMENT_TAB_TOGGLES = [
-  { key: "offices", label: "Offices", desc: "Coverage map and visits per branch, VO, area and region office. Also enables Branch 360° and branch search." },
-  { key: "people", label: "People", desc: "Staff directory and each person's full visit history. Also enables links to person profiles from the Summary." },
-  { key: "analytics", label: "Analytics", desc: "In-depth visit and action item charts." },
+// The Management section's tabs: every employee with the Management role sees all of them (listed
+// on the admin console's Features page). The old per-tab switches in settings.managementTabs are ignored.
+export const MANAGEMENT_TABS = [
+  { key: "summary", label: "Overview", desc: "What needs attention today, and the programme in charts." },
+  { key: "offices", label: "Offices", desc: "Every branch, VO, area and region office: visits, who went, and how its issues are doing. Also Branch 360° and branch search." },
+  { key: "people", label: "People", desc: "Everyone who makes visits, where they went, what they recorded, and each person's full history." },
+  { key: "departments", label: "Departments", desc: "How each department deals with the issues it is given: where they stand, how fast, and what is late." },
 ];
-export const managementTabOn = (settings, key) => key === "summary" || !!settings?.managementTabs?.[key];

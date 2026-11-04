@@ -1,6 +1,6 @@
 import React from "react";
 import { Clock, ChevronRight, Check, Eye, MessageCircle, Image, Users, PenLine, BedDouble } from "lucide-react";
-import { PHASES, phaseOf, countsOf, tripStart, tripTitle, tripPath, computeDuration, fmtDay, fmtTime, relativeDay, plural, reasonText, shortName } from "../../lib/visits";
+import { PHASES, phaseOf, countsOf, tripStart, tripTitle, tripPath, computeDuration, tripDays, fmtDay, fmtDate, relativeDay, plural, reasonText, shortName } from "../../lib/visits";
 
 export const TYPE_ICONS = {
   complaint: { icon: MessageCircle, cls: "ico-complaint" },
@@ -19,7 +19,8 @@ export default function VisitCard({ visit: v, onOpen }) {
   const phase = phaseOf(v);
   const working = phase === "progress" || phase === "due";
   const c = countsOf(v);
-  const dur = computeDuration(v.date, v.visitTime, v.returnDate, v.returnTime);
+  // older visits have times (a duration); newer ones only dates (a number of days)
+  const dur = computeDuration(v.date, v.visitTime, v.returnDate, v.returnTime) || tripDays(v);
   const start = v.date ? tripStart(v) : null;
   const path = tripPath(v);
   const stops = v.stops || [];
@@ -40,7 +41,7 @@ export default function VisitCard({ visit: v, onOpen }) {
         <span className="vcard-title">{tripTitle(v)}</span>
         <span className="vcard-meta">
           <span>{reasonText(v)}</span>
-          <span><Clock size={12} /> {v.visitTime ? fmtTime(v.visitTime) : "start not set"} – {v.returnTime ? fmtTime(v.returnTime) : <span className={phase !== "done" ? "missing" : ""}>return not set</span>}</span>
+          <span><Clock size={12} /> {v.returnDate ? (v.returnDate === v.date ? "Same day" : `Back ${fmtDate(v.returnDate)}`) : <span className={phase !== "done" ? "missing" : ""}>return date not set</span>}</span>
           {dur && <span>{dur}</span>}
         </span>
         {path && path !== tripTitle(v) && <span className="vcard-path">{path}</span>}

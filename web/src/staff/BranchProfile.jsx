@@ -77,7 +77,7 @@ export default function BranchProfile({ office, coverageRows, onBack, onNewVisit
           <Kpi icon={Star} tone="amber" label="Avg rating" value={row.avgRating == null ? "—" : Number(row.avgRating.toFixed(1))} decimals={1} suffix={row.avgRating == null ? "" : "★"}
                spark={ratingTrend.some((x) => x > 0) ? ratingTrend : null} sparkColor="var(--warning)" />
         </Reveal>
-        <Reveal i={2}><Kpi icon={MessageCircle} tone={row.openComplaints ? "red" : "green"} label="Open action items" value={row.openComplaints} foot={<span className="pill pill-brand">{row.totalComplaints} total</span>} /></Reveal>
+        <Reveal i={2}><Kpi icon={MessageCircle} tone={row.openComplaints ? "red" : "green"} label="Open issues" value={row.openComplaints} foot={<span className="pill pill-brand">{row.totalComplaints} total</span>} /></Reveal>
         <Reveal i={3}><Kpi icon={ShieldCheck} tone="green" label="Info completeness" value={row.quality == null ? "—" : Math.round(row.quality * 100)} suffix={row.quality == null ? "" : "%"} /></Reveal>
         <Reveal i={4}><Kpi icon={Users} tone="blue" label="Clients heard" value={members} /></Reveal>
       </div>
@@ -105,7 +105,7 @@ export default function BranchProfile({ office, coverageRows, onBack, onNewVisit
                     </div>
                     <div style={{ fontSize: 12, color: "var(--ink-faint)", marginTop: 6, display: "flex", gap: 12, flexWrap: "wrap" }}>
                       {rs.length > 0 && <span>★ {average(rs).toFixed(1)}</span>}
-                      <span>{(v.complaints || []).length} action item{(v.complaints || []).length === 1 ? "" : "s"}</span>
+                      <span>{(v.complaints || []).length} issue{(v.complaints || []).length === 1 ? "" : "s"}</span>
                       <span>{Math.round(q * 100)}% complete</span>
                       <span className="mono">{v.id}</span>
                     </div>
@@ -151,9 +151,9 @@ export default function BranchProfile({ office, coverageRows, onBack, onNewVisit
       </div>
 
       <Reveal className="card card-pad" i={1} style={{ marginTop: 16 }}>
-        <p className="analytics-card-title">Action items raised here</p>
+        <p className="analytics-card-title">Issues raised here</p>
         <p className="analytics-card-sub">From filing to resolution.</p>
-        {complaints.length === 0 ? <div className="viz-empty">No action items raised at this office.</div> : (
+        {complaints.length === 0 ? <div className="viz-empty">No issues raised at this office.</div> : (
           <div className="ctable-wrap">
             <table className="ctable stack">
               <thead><tr><th>ID</th><th>Issue</th><th>Dept</th><th>Urgency</th><th>Status</th><th>Filed</th><th>Assigned to</th></tr></thead>

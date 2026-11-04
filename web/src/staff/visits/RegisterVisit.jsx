@@ -1,51 +1,68 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Timer, Check, Trash2, Plus, BedDouble, X } from "lucide-react";
-import { REASONS, STAY_TYPES, BLCS, computeDuration, isoDate, countsOf } from "../../lib/visits";
+import { ArrowLeft, CalendarDays, Check, Trash2, Plus, BedDouble, X, GraduationCap, Hotel, Home, Building2, MapPin } from "lucide-react";
+import { REASONS, STAY_TYPES, BLCS, tripDays, isoDate, countsOf } from "../../lib/visits";
 import { makeId } from "../../lib/ids";
-import { AreaPicker, OfficeSelector, stopsToPlaces, placesToStops } from "./Places";
-import { TimeField } from "./TimePicker";
+import { StopsEditor } from "./OfficeSearch";
 
 const BLC = STAY_TYPES[0];
 const OTHER_BLC = "__other";
 const optional = (t = "(optional)") => <span className="opt">{t}</span>;
 
-/** One accommodation: a BLC (picked from the list or typed), a hotel, a guest house… */
-function StayCard({ stay: s, index, onChange, onRemove }) {
+// The accommodation types, as big buttons: the card asks for the type first and only then shows the rest.
+const STAY_ICONS = { [BLC]: GraduationCap, Hotel: Hotel, "Guest house": Home, "BRAC office": Building2, Other: MapPin };
+const STAY_HINTS = { [BLC]: "BRAC Learning Centre", Hotel: "Any hotel", "Guest house": "Government or private", "BRAC office": "Staying at an office", Other: "Somewhere else" };
+const NAME_PLACEHOLDERS = {
+  Hotel: "Name of the hotel and its town, e.g. Hotel Al-Amin, Sylhet",
+  "Guest house": "Name of the guest house and its town, e.g. Parjatan Motel, Cox's Bazar",
+  "BRAC office": "Which BRAC office you are staying at, e.g. Rangpur Regional Office",
+  Other: "Where you are staying, e.g. a relative's house in Bogura town",
+};
+
+/** One accommodation: first its type (a BLC, a hotel, a guest house…), then where, when and any remarks. */
+function StayCard({ stay: s, index, blcs, onChange, onRemove }) {
   const set = (patch) => onChange({ ...s, ...patch });
-  const blcPick = BLCS.includes(s.name) ? s.name : s.other ? OTHER_BLC : "";
-  const namePlaceholder = { Hotel: "Hotel name", "Guest house": "Guest house name", "BRAC office": "Office name" }[s.type] || "Accommodation name";
+  const blcPick = blcs.includes(s.name) ? s.name : s.other ? OTHER_BLC : "";
+  const Icon = STAY_ICONS[s.type] || BedDouble;
   return (
-    <div className="stay-card">
+    <div className={`stay-card ${s.type ? "" : "picking"}`}>
       <div className="stay-head">
-        <span className="hub-ico ico-stay"><BedDouble size={17} /></span>
-        <b>{s.name || (s.type === BLC ? "BRAC Learning Centre" : s.type) || `Accommodation ${index + 1}`}</b>
+        <span className="hub-ico ico-stay"><Icon size={17} /></span>
+        <b>{s.type ? s.name || (s.type === BLC ? "BRAC Learning Centre" : s.type) : "What kind of place are you staying at?"}</b>
+        {s.type && <button type="button" className="link-btn stay-change" onClick={() => set({ type: "", name: "", other: false })}>Change type</button>}
         <button type="button" className="icon-btn" onClick={onRemove} aria-label={`Remove accommodation ${index + 1}`}><X size={15} /></button>
       </div>
-      <div className="field-row">
-        <div className="field-group">
-          <label className="field-label" htmlFor={`stay-type-${s.id}`}>Accommodation type</label>
-          <select id={`stay-type-${s.id}`} className="select" value={s.type} onChange={(e) => set({ type: e.target.value, name: "", other: false })}>
-            {STAY_TYPES.map((t) => <option key={t}>{t}</option>)}
+      {!s.type ? (
+        <div className="stay-types" role="group" aria-label="Accommodation type">
+          {STAY_TYPES.map((t) => {
+            const I = STAY_ICONS[t] || BedDouble;
+            return (
+              <button key={t} type="button" id={index === 0 && t === BLC ? "reg-stay-type" : undefined} className="stay-type" onClick={() => set({ type: t, name: "", other: false })}>
+                <I size={20} />
+                <b>{t === BLC ? "BLC" : t}</b>
+                <small>{STAY_HINTS[t]}</small>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+      <div className="stay-rest">
+      <div className="field-group">
+        <label className="field-label" htmlFor={`stay-name-${s.id}`}>{s.type === BLC ? "Which BLC" : "Name of the place"}</label>
+        {s.type === BLC ? (
+          <select id={`stay-name-${s.id}`} className="select" autoFocus value={blcPick}
+                  onChange={(e) => (e.target.value === OTHER_BLC ? set({ name: "", other: true }) : set({ name: e.target.value, other: false }))}>
+            <option value="">Select the BLC you are staying at</option>
+            {blcs.map((b) => <option key={b}>{b}</option>)}
+            <option value={OTHER_BLC}>Another BLC (type its name)</option>
           </select>
-        </div>
-        <div className="field-group">
-          <label className="field-label" htmlFor={`stay-name-${s.id}`}>{s.type === BLC ? "BLC" : "Name"}</label>
-          {s.type === BLC ? (
-            <select id={`stay-name-${s.id}`} className="select" value={blcPick}
-                    onChange={(e) => (e.target.value === OTHER_BLC ? set({ name: "", other: true }) : set({ name: e.target.value, other: false }))}>
-              <option value="">Select BLC</option>
-              {BLCS.map((b) => <option key={b}>{b}</option>)}
-              <option value={OTHER_BLC}>Other BLC (enter name)</option>
-            </select>
-          ) : (
-            <input id={`stay-name-${s.id}`} className="input" placeholder={namePlaceholder} value={s.name} onChange={(e) => set({ name: e.target.value })} />
-          )}
-        </div>
+        ) : (
+          <input id={`stay-name-${s.id}`} className="input" autoFocus placeholder={NAME_PLACEHOLDERS[s.type] || NAME_PLACEHOLDERS.Other} value={s.name} onChange={(e) => set({ name: e.target.value })} />
+        )}
       </div>
       {s.type === BLC && blcPick === OTHER_BLC && (
         <div className="field-group">
           <label className="field-label" htmlFor={`stay-other-${s.id}`}>BLC name</label>
-          <input id={`stay-other-${s.id}`} className="input" autoFocus placeholder="e.g. BLC Bogura" value={s.name} onChange={(e) => set({ name: e.target.value })} />
+          <input id={`stay-other-${s.id}`} className="input" autoFocus placeholder="The BLC's name as written on its signboard, e.g. BLC Bogura" value={s.name} onChange={(e) => set({ name: e.target.value })} />
         </div>
       )}
       <div className="field-row">
@@ -60,48 +77,42 @@ function StayCard({ stay: s, index, onChange, onRemove }) {
       </div>
       <div className="field-group" style={{ marginBottom: 0 }}>
         <label className="field-label" htmlFor={`stay-notes-${s.id}`}>Remarks {optional()}</label>
-        <input id={`stay-notes-${s.id}`} className="input" placeholder="Room number, contact person, phone number" value={s.notes} onChange={(e) => set({ notes: e.target.value })} />
+        <input id={`stay-notes-${s.id}`} className="input" placeholder="Room number, the caretaker's name and phone, or anything a colleague staying there should know" value={s.notes} onChange={(e) => set({ notes: e.target.value })} />
       </div>
+      </div>
+      )}
     </div>
   );
 }
 
+/** The visit's own place is its first office's (older screens and the figures read it). */
+const placeOfVisit = (stops) => {
+  const first = stops.find((s) => s.kind !== "vo");
+  return first ? { division: first.division || "", region: first.region || "", area: first.area || "" } : { division: "", region: "", area: "" };
+};
+
 /**
- * Register a visit (or edit one). Required: the visit area (Division → District → Area) and the
- * visit date. The offices to be visited, times and accommodation are optional and can be added
- * or changed later from the visit page.
+ * Register a visit (or edit one), in this order: the offices (found by searching, like the stops of
+ * a trip), the dates, the purpose, then accommodation. Required: at least one office and the visit
+ * date. Visits don't ask for times; ones that already have times keep them.
  */
-export default function RegisterVisit({ tree, purposes = REASONS, visit, prefill, focusField, onSave, onCancel, onDelete }) {
+export default function RegisterVisit({ purposes = REASONS, blcs = BLCS, visit, prefill, focusField, onSave, onCancel, onDelete }) {
   const edit = !!visit;
   const now = useMemo(() => new Date(), []);
 
-  const [route, setRoute] = useState(() => {
-    if (visit) return { division: visit.division || "", region: visit.region || "", area: visit.area || "", stops: (visit.stops || []).map((s) => ({ ...s })) };
-    if (prefill) return { division: prefill.division, region: prefill.district, area: prefill.area, stops: [{ kind: "branch", name: prefill.name, ...(prefill.id ? { officeId: prefill.id } : {}), division: prefill.division, region: prefill.district, area: prefill.area }] };
-    return { division: "", region: "", area: "", stops: [] };
+  const [stops, setStops] = useState(() => {
+    if (visit) return (visit.stops || []).map((s) => ({ ...s }));
+    if (prefill) return [{ kind: "branch", name: prefill.name, ...(prefill.id ? { officeId: prefill.id } : {}), ...(prefill.code ? { code: prefill.code } : {}), division: prefill.division, region: prefill.district, area: prefill.area }];
+    return [];
   });
   const [reason, setReason] = useState(visit?.reason || (purposes.includes("Monitoring") ? "Monitoring" : purposes[0]));
   const [reasonOther, setReasonOther] = useState(visit?.reasonOther || "");
   const [date, setDate] = useState(visit?.date || isoDate(now));
-  const [visitTime, setVisitTime] = useState(visit?.visitTime || "");
   const [returnDate, setReturnDate] = useState(visit?.returnDate || "");
-  const [returnTime, setReturnTime] = useState(visit?.returnTime || "");
   const [stays, setStays] = useState(() => (visit?.stays || []).map((s) => ({ ...s })));
   const [sureDelete, setSureDelete] = useState(false);
 
-  const newStay = () => ({ id: makeId("SY"), type: BLC, name: "", checkIn: date, checkOut: returnDate || date, notes: "" });
-
-  // A new area keeps only the offices that still belong to it: regional offices stay within the
-  // division, area offices within the district, branches and VOs within the area.
-  const changeArea = (next) => {
-    const keep = (s) => {
-      if (next.division !== route.division) return false;
-      if (s.kind === "office" && / Region Office$/.test(s.name)) return true;
-      if (s.kind === "office") return next.region === route.region;
-      return next.region === route.region && next.area === route.area;
-    };
-    setRoute({ ...next, stops: route.stops.filter(keep) });
-  };
+  const newStay = () => ({ id: makeId("SY"), type: "", name: "", checkIn: date, checkOut: returnDate || date, notes: "" });
 
   // Accommodation dates follow the visit dates until they're changed by hand.
   const changeDates = (nextDate, nextReturn) => {
@@ -125,21 +136,20 @@ export default function RegisterVisit({ tree, purposes = REASONS, visit, prefill
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusField]);
 
-  const allTimes = !!(date && visitTime && returnDate && returnTime);
-  const duration = computeDuration(date, visitTime, returnDate, returnTime);
-  const why = !route.division || !route.region || !route.area ? "Select the division, region and area of the visit."
+  const days = tripDays({ date, returnDate });
+  const why = !stops.some((x) => x.kind !== "vo") ? "Add at least one office you're visiting."
     : !date ? "Select the visit date."
     : reason === "Other" && !reasonOther.trim() ? "Specify the purpose of the visit."
-    : returnDate && returnDate < date ? "The return date cannot be before the visit date."
-    : allTimes && !duration ? "The return time must be after the start time." : "";
-  const later = why ? "" : edit ? "" : "Offices, times and accommodation can be added or updated later from the visit page.";
+    : returnDate && returnDate < date ? "The return date cannot be before the visit date." : "";
+  const later = why ? "" : edit ? "" : "The return date and accommodation can be added later from the visit page.";
 
   const save = () => {
     if (why) return;
     onSave({
-      ...route,
+      ...placeOfVisit(stops), stops,
       reason, reasonOther: reason === "Other" ? reasonOther.trim() : "",
-      date, visitTime, returnDate, returnTime,
+      // times are no longer asked for; an older visit keeps the ones it has
+      date, returnDate, visitTime: visit?.visitTime || "", returnTime: visit?.returnTime || "",
       stays: stays.filter((s) => s.name.trim() || s.notes.trim()).map(({ other, ...s }) => ({ ...s, name: s.name.trim(), notes: s.notes.trim() })),
     });
   };
@@ -160,21 +170,35 @@ export default function RegisterVisit({ tree, purposes = REASONS, visit, prefill
           <h1 className="h-title">{edit ? "Update visit details" : "Register a visit"}</h1>
           <p className="h-desc">
             {edit
-              ? "Update the visit location, offices, schedule, purpose or accommodation."
-              : "Register a visit on the day or in advance. The visit area and date are required; other details can be added later."}
+              ? "Update the offices, schedule, purpose or accommodation."
+              : "Register a visit on the day or in advance. The offices and date are required; other details can be added later."}
           </p>
         </div>
 
         <div className="wizard-body">
           <fieldset className="form-sec">
-            <legend>Visit location</legend>
-            <AreaPicker tree={tree} value={route} onChange={changeArea} idPrefix="reg" />
+            <legend>Offices you're visiting <span className="req">*</span></legend>
+            <StopsEditor value={stops} onChange={setStops} idPrefix="reg" />
+            <p className="field-hint" style={{ marginBottom: 0 }}>Search by office name or branch code. Paste several codes separated by commas to add them together. Press Enter to add the highlighted office.</p>
           </fieldset>
 
           <fieldset className="form-sec">
-            <legend>Offices to be visited {optional()}</legend>
-            <OfficeSelector tree={tree} division={route.division} region={route.region} area={route.area}
-                            value={stopsToPlaces(route)} onChange={(places) => setRoute({ ...route, stops: placesToStops(places) })} idPrefix="reg" />
+            <legend>Schedule</legend>
+            <div className="field-row">
+              <div className="field-group">
+                <label className="field-label" htmlFor="reg-date">Visit date <span className="req">*</span></label>
+                <input id="reg-date" type="date" className="input" value={date}
+                       onChange={(e) => changeDates(e.target.value, returnDate && returnDate < e.target.value ? e.target.value : returnDate)} />
+              </div>
+              <div className="field-group">
+                <label className="field-label" htmlFor="reg-returnDate">Return date {optional()}</label>
+                <input id="reg-returnDate" type="date" className="input" value={returnDate} min={date || undefined} onChange={(e) => changeDates(date, e.target.value)} />
+              </div>
+            </div>
+            <div className={`duration-display ${days ? "filled" : ""}`}>
+              <CalendarDays size={14} />
+              {days || "The number of days shows when the return date is set"}
+            </div>
           </fieldset>
 
           <fieldset className="form-sec">
@@ -189,43 +213,11 @@ export default function RegisterVisit({ tree, purposes = REASONS, visit, prefill
             {reason === "Other" && (
               <div className="field-group" style={{ marginBottom: 0 }}>
                 <label className="field-label" htmlFor="reg-reasonOther">Specify purpose <span className="req">*</span></label>
-                <input id="reg-reasonOther" className="input" autoFocus={!edit || !visit.reasonOther} placeholder="Purpose of the visit" value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} maxLength={120} />
+                <input id="reg-reasonOther" className="input" autoFocus={!edit || !visit.reasonOther} placeholder="Why you are going, in a few words, e.g. follow-up on last month's audit findings" value={reasonOther} onChange={(e) => setReasonOther(e.target.value)} maxLength={120} />
               </div>
             )}
           </fieldset>
 
-          <fieldset className="form-sec">
-            <legend>Schedule</legend>
-            <div className="field-row">
-              <div className="field-group">
-                <label className="field-label" htmlFor="reg-date">Visit date <span className="req">*</span></label>
-                <input id="reg-date" type="date" className="input" value={date}
-                       onChange={(e) => changeDates(e.target.value, returnDate && returnDate < e.target.value ? e.target.value : returnDate)} />
-              </div>
-              <div className="field-group">
-                <label className="field-label" htmlFor="reg-visitTime">Start time {optional()}</label>
-                <TimeField id="reg-visitTime" label="Start time" value={visitTime} onChange={setVisitTime} />
-              </div>
-            </div>
-            <div className="field-row">
-              <div className="field-group">
-                <label className="field-label" htmlFor="reg-returnDate">Return date {optional()}</label>
-                <input id="reg-returnDate" type="date" className="input" value={returnDate} min={date || undefined} onChange={(e) => changeDates(date, e.target.value)} />
-              </div>
-              <div className="field-group">
-                <label className="field-label" htmlFor="reg-returnTime">Return time {optional()}</label>
-                <TimeField id="reg-returnTime" label="Return time" value={returnTime}
-                           onChange={(t) => { setReturnTime(t); if (t && !returnDate) changeDates(date, date); }} />
-              </div>
-            </div>
-            <div className="field-group" style={{ marginBottom: 0 }}>
-              <label className="field-label">Duration</label>
-              <div className={`duration-display ${duration ? "filled" : allTimes ? "invalid" : ""}`}>
-                <Timer size={14} />
-                {duration || (allTimes ? "The return time must be after the start time" : "Calculated when start and return times are entered")}
-              </div>
-            </div>
-          </fieldset>
 
           {/* Optional: hidden until asked for. */}
           <div className="stay-sec">
@@ -239,7 +231,7 @@ export default function RegisterVisit({ tree, purposes = REASONS, visit, prefill
               <fieldset className="form-sec">
                 <legend>Accommodation {optional()}</legend>
                 {stays.map((s, i) => (
-                  <StayCard key={s.id} stay={s} index={i}
+                  <StayCard key={s.id} stay={s} index={i} blcs={blcs}
                             onChange={(next) => setStays((list) => list.map((x) => (x.id === s.id ? next : x)))}
                             onRemove={() => setStays((list) => list.filter((x) => x.id !== s.id))} />
                 ))}

@@ -66,7 +66,7 @@ export default function CoverageView({ coverage, offices, visits, target, loc, s
       { label: "Branch", key: "name" }, { label: "Area", key: "area" }, { label: "Region", key: "district" }, { label: "Division", key: "division" },
       { label: "Status", get: (r) => STATUS_META[r.status].label }, { label: "Last visit", get: (r) => r.lastDate || "" },
       { label: "Days since last visit", get: (r) => r.daysSince ?? "" }, { label: "Visits", key: "visitCount" },
-      { label: "Avg rating", get: (r) => (r.avgRating == null ? "" : r.avgRating.toFixed(1)) }, { label: "Open action items", key: "openComplaints" },
+      { label: "Avg rating", get: (r) => (r.avgRating == null ? "" : r.avgRating.toFixed(1)) }, { label: "Open issues", key: "openComplaints" },
     ], tableRows);
 
   const single = loc.branch !== "All" ? rows[0] : null;
@@ -183,7 +183,7 @@ export default function CoverageView({ coverage, offices, visits, target, loc, s
 
         <div className="ctable-wrap office-table">
           <table className="ctable">
-            <thead><tr><th>Branch</th><th>Status</th><th>Last visit</th><th>Visits</th><th>Rating</th><th>Open action items</th><th /></tr></thead>
+            <thead><tr><th>Branch</th><th>Status</th><th>Last visit</th><th>Visits</th><th>Rating</th><th>Open issues</th><th /></tr></thead>
             <tbody>
               {shown.map((r) => (
                 <tr key={r.key} style={{ cursor: "pointer" }} onClick={() => onOpenBranch(r)}>

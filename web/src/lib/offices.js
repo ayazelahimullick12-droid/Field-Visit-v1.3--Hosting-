@@ -56,11 +56,24 @@ let directory = new Map();
 export function setOfficeDirectory(offices, structure) {
   const next = new Map();
   (offices || []).forEach((o) => next.set(o.id, o));
-  (structure?.regionalOffices || []).forEach((o) => next.set(o.id, { ...o, placements: [{ division: o.division, region: o.region || "", area: "" }] }));
-  (structure?.areaOffices || []).forEach((o) => next.set(o.id, { ...o, placements: [{ division: o.division, region: o.region, area: o.area }] }));
+  (structure?.regionalOffices || []).forEach((o) => next.set(o.id, { ...o, type: "region", placements: [{ division: o.division, region: o.region || "", area: "" }] }));
+  (structure?.areaOffices || []).forEach((o) => next.set(o.id, { ...o, type: "area", placements: [{ division: o.division, region: o.region, area: o.area }] }));
   directory = next;
 }
 export const officeById = (id) => (id ? directory.get(id) : undefined);
+
+/** Every active office (branches, area and regional offices), for the office search. Rebuilt when the lists change. */
+let listCache = { from: null, list: [] };
+export function getOfficeList() {
+  if (listCache.from === directory) return listCache.list;
+  const kindOf = (o) => (o.type === "region" || o.type === "area" ? o.type : "branch");
+  const list = [...directory.values()].filter((o) => o.active !== false).map((o) => ({
+    id: o.id, kind: kindOf(o), name: o.name, code: o.code || "",
+    places: o.placements?.length ? o.placements : [{ division: o.division, region: o.region ?? o.district, area: o.area || "" }],
+  }));
+  listCache = { from: directory, list };
+  return list;
+}
 
 /** Every Division › Region › Area a record counts in: its office's placements, or its own fields. */
 export function placementsOf(rec) {
@@ -77,36 +90,6 @@ export const inPlace = (rec, filter) => placementsOf(rec).some((p) => fits(p, fi
 /** The values of one level ("division", "region", "area") a record counts under, within the filter. */
 export const placeValues = (rec, field, filter) =>
   [...new Set(placementsOf(rec).filter((p) => fits(p, filter)).map((p) => p[field]).filter(Boolean))];
-
-/**
- * division → region → area → [{ id, name }] branches, for the visit form's dropdowns. A branch is
- * listed under every area it sits in. Regions and areas come from /api/structure, so an area shows
- * even before it has a branch. The tree also carries the active Regional and Area Offices, as
- * `tree.regionalOffices` / `tree.areaOffices` (not enumerable, so Object.keys(tree) is still just the divisions).
- */
-export function buildLocationTree(offices, structure) {
-  const tree = {};
-  const add = (division, region, area) => {
-    if (!division || !region) return;
-    tree[division] = tree[division] || {};
-    tree[division][region] = tree[division][region] || {};
-    if (area) tree[division][region][area] = tree[division][region][area] || [];
-  };
-  (structure?.regions || []).filter((r) => r.active !== false).forEach((r) => add(r.division, r.name));
-  (structure?.areas || []).filter((a) => a.active !== false).forEach((a) => add(a.division, a.region, a.name));
-  (offices || []).filter((o) => o.active !== false).forEach((o) => {
-    placementsOf({ ...o, region: o.district }).forEach((p) => {
-      if (!p.area) return;
-      add(p.division, p.region, p.area);
-      const list = tree[p.division][p.region][p.area];
-      if (!list.some((b) => b.id === o.id)) list.push({ id: o.id, name: o.name });
-    });
-  });
-  Object.values(tree).forEach((regions) => Object.values(regions).forEach((areas) => Object.values(areas).forEach((list) => list.sort((a, b) => a.name.localeCompare(b.name)))));
-  Object.defineProperty(tree, "regionalOffices", { value: (structure?.regionalOffices || []).filter((o) => o.active !== false) });
-  Object.defineProperty(tree, "areaOffices", { value: (structure?.areaOffices || []).filter((o) => o.active !== false) });
-  return tree;
-}
 
 const avg = (arr) => (arr.length ? arr.reduce((s, r) => s + r, 0) / arr.length : null);
 export const average = avg;

@@ -50,7 +50,7 @@ export class VisitsService {
 
   /**
    * Runs `change` on one visit while it is locked and saves what it returns. Use it for every
-   * server-side change to a visit (assigning an action item, a like, a comment ...), so two
+   * server-side change to a visit (assigning an issue, a like, a comment ...), so two
    * people acting at the same moment can't undo each other.
    */
   async update<T>(id: string, change: (visit: any) => T | Promise<T>): Promise<T> {

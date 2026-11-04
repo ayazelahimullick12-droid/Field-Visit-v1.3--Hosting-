@@ -109,7 +109,7 @@ function AdminLoginCard({ onLogin }) {
     <div className="login-card">
       <div className="login-logo"><ShieldAlert size={22} /></div>
       <h1 className="login-title">Admin console</h1>
-      <p className="login-sub">Action items, employees, offices and settings</p>
+      <p className="login-sub">Issues, employees, offices and settings</p>
 
       <div className="field-group">
         <label className="field-label" htmlFor="admin-pin">Admin PIN</label>

@@ -4,12 +4,12 @@ import {
 } from "lucide-react";
 import {
   ENTRY_TYPES, ENTRY_ORDER, phaseOf, entriesOf, sortEntries, countsOf, isDraft, markDoneBlocker, tripStart, tripTitle,
-  computeDuration, fmtDay, fmtDate, fmtClock, relativeDay, plural, shortName, reasonText, whenText, UNDEFINED_UNIT, mmss, entryPlaces, placesText,
+  computeDuration, tripDays, fmtDay, fmtDate, fmtClock, relativeDay, plural, shortName, reasonText, whenText, UNDEFINED_UNIT, mmss, entryPlaces, placesText,
 } from "../../lib/visits";
 import { statusOf, statusClass, complaintTitle } from "../../lib/complaints";
 import { PhasePill, TYPE_ICONS } from "./VisitCard";
 import EntrySheet, { EntryView, draftReady } from "./EntrySheet";
-import { RouteSummary } from "./Places";
+import { VisitStops } from "./OfficeSearch";
 import ConfirmDialog from "./Confirm";
 import { SyncPill } from "./SyncPill";
 
@@ -56,7 +56,7 @@ export function EntryRow({ e, onOpen }) {
  * submitted (locked) after. "Mark as done" closes the visit.
  * `viewer` (management looking at someone else's visit) makes the whole page read-only.
  */
-export default function VisitHub({ visit: v, tree, departments, questions, sync, initialSheet, onSave, onEditDetails, onMarkedDone, onBack, showToast, viewer = null, onDelete = null }) {
+export default function VisitHub({ visit: v, departments, questions, sync, initialSheet, onSave, onEditDetails, onMarkedDone, onBack, showToast, viewer = null, onDelete = null }) {
   const [sheet, setSheet] = useState(initialSheet || null); // { type, entryId? }
   const [openType, setOpenType] = useState(initialSheet?.type || null);
   const [doneAsk, setDoneAsk] = useState(false);
@@ -67,7 +67,7 @@ export default function VisitHub({ visit: v, tree, departments, questions, sync,
   const readOnly = v.status === "done" || !!viewer;
   const counts = countsOf(v);
   const start = v.date ? tripStart(v) : null;
-  const dur = computeDuration(v.date, v.visitTime, v.returnDate, v.returnTime);
+  const dur = computeDuration(v.date, v.visitTime, v.returnDate, v.returnTime) || tripDays(v);
   const stays = v.stays || [];
 
   const saveEntry = (type, entry, opts = {}) => {
@@ -193,10 +193,10 @@ export default function VisitHub({ visit: v, tree, departments, questions, sync,
           <section className="hub-card">
             <div className="hub-head">
               <span className="hub-ico ico-route"><Route size={19} /></span>
-              <div className="tx"><h3>Visit details</h3><p>{(v.stops || []).length ? `${plural(v.stops.length, "office")} selected` : "No offices selected"}</p></div>
+              <div className="tx"><h3>Visit details</h3><p>{(() => { const n = (v.stops || []).filter((s) => s.kind !== "vo"); const skipped = n.filter((s) => s.skipped).length; return n.length ? `${plural(n.length, "office")}${skipped ? ` · ${skipped} not visited` : ""}` : "No offices yet"; })()}</p></div>
               {!readOnly && <button className="btn btn-secondary btn-sm" onClick={() => onEditDetails()}><Edit3 size={14} /> Change</button>}
             </div>
-            <RouteSummary visit={v} empty="Location not set" showNone={false} />
+            <VisitStops visit={v} readOnly={readOnly} onChange={(stops) => onSave({ ...v, stops })} />
             <div className="rs-line"><Clock size={14} /><span>{whenText(v)}</span></div>
             {stays.map((s) => (
               <div key={s.id} className="rs-line stay"><BedDouble size={14} /><span>{s.name || s.type}{stayRange(s) ? <span className="rs-muted"> · {stayRange(s)}</span> : null}</span></div>
@@ -208,7 +208,7 @@ export default function VisitHub({ visit: v, tree, departments, questions, sync,
           <section className="records-box" aria-label={`Records for visit ${v.id}`}>
           <div className="rb-title">
             <b>Records for this visit</b>
-            <small>Action items, client interactions, observations and stories recorded during {tripTitle(v)}{start ? `, ${fmtDay(start)}` : ""}.</small>
+            <small>Issues, client interactions, observations and stories recorded during {tripTitle(v)}{start ? `, ${fmtDay(start)}` : ""}.</small>
           </div>
           <div className="etiles" role="group" aria-label="Add to this visit">
             {ENTRY_ORDER.map((t) => {
@@ -256,7 +256,7 @@ export default function VisitHub({ visit: v, tree, departments, questions, sync,
       ) : !readOnly && (
         <EntrySheet
           key={`${sheet.type}-${sheet.entryId || "new"}`}
-          type={sheet.type} entry={sheetEntry} visit={v} tree={tree}
+          type={sheet.type} entry={sheetEntry} visit={v}
           departments={departments} questions={questions} showToast={showToast}
           onSave={(entry, opts) => saveEntry(sheet.type, entry, opts)}
           onDelete={sheetEntry ? () => deleteEntry(sheet.type, sheetEntry.id) : null}
@@ -271,7 +271,7 @@ export default function VisitHub({ visit: v, tree, departments, questions, sync,
           {counts.total > 0 && (
             <div className="done-drafts">
               <b>{[counts.submitted && plural(counts.submitted, "submitted entry", "submitted entries"), counts.drafts && plural(counts.drafts, "draft")].filter(Boolean).join(" and ")} will be deleted.</b>
-              {counts.complaint.submitted > 0 && <p style={{ margin: "4px 0 0" }}>This includes {plural(counts.complaint.submitted, "action item")} already sent to the admin.</p>}
+              {counts.complaint.submitted > 0 && <p style={{ margin: "4px 0 0" }}>This includes {plural(counts.complaint.submitted, "issue")} already sent to the admin.</p>}
             </div>
           )}
         </ConfirmDialog>

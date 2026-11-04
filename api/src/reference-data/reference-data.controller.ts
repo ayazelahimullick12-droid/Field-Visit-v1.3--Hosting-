@@ -8,7 +8,7 @@ export const DEFAULT_APP_SETTINGS = {
   visitTargetDays: 90,
   managementTabs: { offices: false, people: false, analytics: false },
   // "Purpose of visit" choices on the visit form ("Other" is always added, with a typed reason)
-  visitPurposes: ['Onboarding', 'Monitoring', 'Training', 'Action item resolution', 'Survey'],
+  visitPurposes: ['Onboarding', 'Monitoring', 'Training', 'Issue resolution', 'Survey'],
 };
 
 /**

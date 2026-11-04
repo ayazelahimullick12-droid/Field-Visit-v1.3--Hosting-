@@ -32,12 +32,12 @@ export class ActionItemsService implements OnModuleInit, OnModuleDestroy {
     return { employees, departments };
   }
 
-  /** Finds the action item on its visit, runs `change` on it and saves the visit. */
+  /** Finds the issue on its visit, runs `change` on it and saves the visit. */
   private async onItem<T>(visitId: string, complaintId: string, change: (c: any, visit: any) => T): Promise<{ complaint: any; result: T }> {
     try {
       return await this.visits.update(visitId, (visit) => {
         const c = (visit.complaints || []).find((x: any) => x.id === complaintId);
-        if (!c || c.state === 'draft') throw new Error('Action item not found');
+        if (!c || c.state === 'draft') throw new Error('Issue not found');
         return { complaint: c, result: change(c, visit) };
       });
     } catch (err: any) {

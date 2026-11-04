@@ -40,7 +40,7 @@ export class AuthController {
     return { kind: 'employee', user: employeeJson(emp) };
   }
 
-  /** Self-registration for staff. Their email is where action item emails go if they become a fixer. */
+  /** Self-registration for staff. Their email is where issue emails go if they become a fixer. */
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @Post('register')

@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  Route, Wrench, Eye, RotateCcw, MapPin, CalendarClock, Building2, ClipboardList, CheckCircle2, CircleDot,
-  Users, Image as ImageIcon, Heart, MessageCircle, Share2, ArrowUpRight, ArrowDownRight, Minus,
+  Route, Wrench, Eye, RotateCcw, MapPin, CalendarClock, Building2, ClipboardList, CheckCircle2,
+  Users, Image as ImageIcon, ArrowUpRight, ArrowDownRight, Minus,
 } from "lucide-react";
 import { LocationFilterBar, EMPTY_LOCATION_FILTER, matchesLocation } from "../analytics/common";
 import { computeCoverage, average, DAY_MS, inPlace, placeValues } from "../../lib/offices";
@@ -9,6 +9,8 @@ import { submittedComplaints, entriesOf, entryPlaces, isDraft, plural, reasonTex
 import { statusOf, isFixed, isAssigned } from "../../lib/complaints";
 import { PERIODS, periodRange } from "./periods";
 import { daysToResolve } from "./data";
+import { TipBar } from "./ui";
+import { CountUp } from "../../lib/ui";
 
 /* Management → Summary (and the public summary page): one page, in plain words.
    Every tile says what it counts, gives the number "out of" something where it can, and has one
@@ -17,12 +19,12 @@ import { daysToResolve } from "./data";
    How it's built:
      figures()   works out every number from the visits, offices and settings (no drawing here)
      Summary     the page: filters, then one panel per section
-     VisitsPanel, IssuesPanel, ObservationsPanel   one card per section
+     VisitsPanel, FindingsPanel   one card per section
      MiniBar                     a labelled bar with its legend, used inside the cards
    To add a figure: work it out in figures(), then show it in the section's panel. */
 
 // On screen, statuses use everyday words (the stored values stay the same).
-const STATUS_WORDS = [
+export const STATUS_WORDS = [
   ["Waiting", "Waiting for a department", "var(--ink-faint)"],
   ["Assigned", "Given to a department", "var(--info)"],
   ["In Progress", "Being worked on", "var(--warning)"],
@@ -60,7 +62,7 @@ function countBy(list, keyFn) {
 }
 /** Every office a visit planned or recorded something at (its places, for "is this visit here?"). */
 const visitPlaces = (v) => [
-  ...(v.stops || []).map((st) => placeOfStop(st, v)),
+  ...(v.stops || []).filter((st) => !st.skipped).map((st) => placeOfStop(st, v)),
   ...entriesOf(v).filter((e) => !isDraft(e)).flatMap(entryPlaces),
 ];
 const ANYWHERE = { division: "All", region: "All", area: "All" };
@@ -124,7 +126,7 @@ export function figures({ trips, records, offices, settings, f, employees = [], 
     return ds.length ? ds : [v.division || "Not set"];
   });
   const otherReasons = reasons.slice(4).reduce((s, [, n]) => s + n, 0);
-  // --- problems (action items) raised in the period; their status is as of today ---
+  // --- problems (issues) raised in the period; their status is as of today ---
   const items = submittedComplaints(trips).filter((c) => matchesLocation(c, loc));
   const raised = items.filter((c) => inRange(filedOn(c), r.from, r.to));
   const raisedBefore = r.prevFrom ? items.filter((c) => inRange(filedOn(c), r.prevFrom, r.prevTo)).length : null;
@@ -187,15 +189,18 @@ export function figures({ trips, records, offices, settings, f, employees = [], 
 // Each section has its own colour (the icon chip, the tile icons and the progress bars).
 const TONES = { visits: "var(--success)", issues: "var(--danger)", stories: "var(--brand)" };
 
-export default function Summary({ trips, records, offices = [], employees = [], departments = [], settings, period = "30d", publicView = false }) {
-  const [f, setF] = useState({ ...DEFAULT_FILTERS, period });
+/** `filters` ({ period, loc }): set by Management's shared filter bar, which then replaces the Summary's own.
+ *  `onGo` (Management only): the tiles and bars open the tab with the details (see goProps). */
+export default function Summary({ trips, records, offices = [], employees = [], departments = [], settings, period = "30d", publicView = false, filters = null, onGo }) {
+  const [own, setF] = useState({ ...DEFAULT_FILTERS, period });
+  const f = filters ? { ...DEFAULT_FILTERS, ...filters } : own;
   const F = useMemo(() => figures({ trips, records, offices, settings, f, employees, departments }), [trips, records, offices, settings, f, employees, departments]);
   const words = periodWords(f);
   const filtered = f.period !== DEFAULT_FILTERS.period || Object.values(f.loc).some((v) => v !== "All");
 
   return (
     <div className="s1">
-      {!publicView && (
+      {!publicView && !filters && (
         <div className="card card-pad s1-filters">
           <div className="mf-field">
             <span className="mf-label">Time</span>
@@ -216,15 +221,11 @@ export default function Summary({ trips, records, offices = [], employees = [], 
       )}
 
       <Section icon={Route} tone={TONES.visits} title="Field visits">
-        <VisitsPanel F={F} words={words} />
+        <VisitsPanel F={F} words={words} onGo={onGo} />
       </Section>
 
-      <Section icon={Wrench} tone={TONES.issues} title="Issues found" sub="Action items registered in this period, and where each one stands today.">
-        <IssuesPanel F={F} words={words} publicView={publicView} />
-      </Section>
-
-      <Section icon={Eye} tone={TONES.stories} title="Observations, clients and stories">
-        <ObservationsPanel F={F} words={words} />
+      <Section icon={Wrench} tone={TONES.issues} title="Issues, observations and stories">
+        <FindingsPanel F={F} words={words} publicView={publicView} onGo={onGo} />
       </Section>
     </div>
   );
@@ -254,7 +255,7 @@ function Section({ icon: Icon, tone, title, sub, children }) {
  * Field visits in one card: visits made (with the change from the period before) on the left,
  * branches visited and upcoming visits on the right, and the purpose of visit along the bottom.
  */
-function VisitsPanel({ F, words }) {
+function VisitsPanel({ F, words, onGo }) {
   const ch = trend(F.visits, F.visitsBefore, words.prev);
   const purposes = F.reasons.map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }));
   // visits by the visitor's unit; named teams listed underneath ("Team not set" left out)
@@ -263,9 +264,9 @@ function VisitsPanel({ F, words }) {
   return (
     <div className="card s1-tile s1-panel" style={{ "--tone": TONES.visits }}>
       <div className="s1-panel-top">
-        <div className="s1-panel-main">
+        <div className="s1-panel-main" {...goProps(onGo, { tab: "people", preset: { sort: "most" } }, "See who made them")}>
           <div className="s1-top"><p className="s1-label">Visits made · {words.now.toLowerCase()}</p><MapPin size={17} className="s1-icon" /></div>
-          <p className="s1-num s1-big">{F.visits}</p>
+          <p className="s1-num s1-big"><CountUp value={F.visits} /></p>
           {ch && (
             <span className={`s1-trend ${ch.mood}`}>
               {ch.mood === "flat" ? <Minus size={12} /> : ch.up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />} {ch.text}
@@ -274,15 +275,15 @@ function VisitsPanel({ F, words }) {
           <p className="s1-note">Trips staff registered to field offices, by {plural(F.staff, "staff member")}, to {plural(F.officesReached, "office")}.</p>
         </div>
         <div className="s1-panel-side">
-          <div className="s1-mini">
+          <div className="s1-mini" {...goProps(onGo, { tab: "offices", preset: { kind: "branch" } }, "See every branch")}>
             <div className="s1-top"><span className="s1-label">Branches visited</span><Building2 size={15} className="s1-icon" /></div>
-            <p className="s1-num">{F.visitedInPeriod}<span className="s1-of"> of {F.branches}</span></p>
+            <p className="s1-num"><CountUp value={F.visitedInPeriod} /><span className="s1-of"> of {F.branches}</span></p>
             <div className="s1-progress"><span style={{ width: `${F.branches ? Math.round((F.visitedInPeriod / F.branches) * 100) : 0}%` }} /></div>
             <p className="s1-note">{pct(F.visitedInPeriod, F.branches)}% of branches had at least one visit.</p>
           </div>
-          <div className="s1-mini">
+          <div className="s1-mini" {...goProps(onGo, { tab: "people", preset: { sort: "upcoming" } }, "See who is going")}>
             <div className="s1-top"><span className="s1-label">Upcoming visits</span><CalendarClock size={15} className="s1-icon" /></div>
-            <p className="s1-num">{F.upcoming}<span className="s1-of"> planned</span></p>
+            <p className="s1-num"><CountUp value={F.upcoming} /><span className="s1-of"> planned</span></p>
             <p className="s1-note">
               {F.upcoming
                 ? `Registered for after today${F.upcomingOffices ? `, to ${plural(F.upcomingOffices, "office")}` : ""}. ${F.upcomingThisWeek} in the next 7 days.`
@@ -294,135 +295,139 @@ function VisitsPanel({ F, words }) {
       <div className="s1-panel-bottom">
         <MiniBar label="Purpose of visit" parts={purposes} />
         <MiniBar label="Visits by unit" parts={units} foot={teams.length ? `Teams: ${teams.join(" · ")}` : null} clampFoot />
-        <MiniBar label="Visits by division" parts={F.divisions.map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }))} clampLegend />
+        <MiniBar label="Visits by division" parts={F.divisions.map(([label, value], i) => ({ label, value, color: REASON_COLORS[i % REASON_COLORS.length] }))} clampLegend
+          onPick={onGo && ((division) => division !== "Not set" && onGo({ loc: { division, region: "All", area: "All", branch: "All" } }))} />
       </div>
     </div>
   );
 }
 
-/** A labelled bar split into parts, with a legend (used inside the visits panel). clampLegend / clampFoot:
- *  show two lines of a long legend / note, the rest on hover (or tap / keyboard focus) and in the tooltip. */
-function MiniBar({ label, parts, foot, clampLegend = false, clampFoot = false }) {
-  const total = parts.reduce((n, p) => n + p.value, 0);
+/**
+ * Two lines of something long; on hover (or tap / keyboard focus) the rest unfolds over the page in a
+ * floating card, the hidden part fading in one by one. A "+N more" tag says how much is hidden.
+ * `items`: the children are separate items (a legend) and are counted; otherwise it is one text.
+ */
+function Unfold({ className, items = false, children }) {
+  const wrap = useRef(null);
+  const inner = useRef(null);
+  const [hidden, setHidden] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = inner.current;
+      if (!el) return;
+      const limit = wrap.current.clientHeight;
+      if (!items) { setHidden(el.scrollHeight > el.clientHeight + 2 ? -1 : 0); return; }
+      let n = 0;
+      [...el.children].forEach((k) => {
+        const tail = k.offsetTop + k.offsetHeight > limit + 10; // the inner box starts 8px above the wrapper
+        k.dataset.tail = tail ? "1" : "";
+        if (tail) k.style.setProperty("--i", n++);
+      });
+      setHidden(n);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap.current);
+    return () => ro.disconnect();
+  }, [items, children]);
   return (
-    <div className="s1-minibar">
+    <div ref={wrap} className={`s1-unfold${items ? "" : " text"}${hidden ? " has-more" : ""}`}>
+      <div ref={inner} className={`s1-unfold-in ${className}`} tabIndex={hidden ? 0 : undefined}>{children}</div>
+      {hidden !== 0 && <span className="s1-unfold-more" aria-hidden="true">{hidden > 0 ? `+${hidden} more` : "more"}</span>}
+    </div>
+  );
+}
+
+/** A labelled bar split into parts, with a legend. clampLegend / clampFoot: show two lines of a long
+ *  legend / note and unfold the rest on hover. onPick: legend entries become links (e.g. to filter by
+ *  that division); go: the whole bar opens another tab (see goProps). */
+function MiniBar({ label, parts, foot, clampLegend = false, clampFoot = false, onPick, go }) {
+  const total = parts.reduce((n, p) => n + p.value, 0);
+  const entry = (p) => (onPick
+    ? <button key={p.label} type="button" className="s1-pick" onClick={() => onPick(p.label)} title={`Show ${p.label} only`}><i style={{ background: p.color }} />{p.label} <b>{p.value}</b></button>
+    : <span key={p.label}><i style={{ background: p.color }} />{p.label} <b>{p.value}</b></span>);
+  return (
+    <div className="s1-minibar" {...(go || {})}>
       <p className="s1-label">{label}</p>
       {total === 0 ? <p className="s1-note">No visits in this period.</p> : (
         <>
-          <div className="s1-bar" role="img" aria-label={parts.map((p) => `${p.label}: ${p.value}`).join(", ")}>
-            {parts.map((p) => <span key={p.label} title={`${p.label}: ${p.value}`} style={{ width: `${(p.value / total) * 100}%`, background: p.color }} />)}
-          </div>
-          <div className={`s1-legend${clampLegend ? " s1-clamp" : ""}`} {...(clampLegend ? { tabIndex: 0, title: parts.map((p) => `${p.label} ${p.value}`).join(" · ") } : {})}>
-            {parts.map((p) => <span key={p.label}><i style={{ background: p.color }} />{p.label} <b>{p.value}</b></span>)}
-          </div>
-          {foot && <p className={`s1-note${clampFoot ? " s1-clamp-text" : ""}`} {...(clampFoot ? { tabIndex: 0, title: foot } : {})} style={{ marginTop: 4 }}>{foot}</p>}
+          <TipBar className="s1-bar" parts={parts} />
+          {clampLegend ? <Unfold className="s1-legend" items>{parts.map(entry)}</Unfold> : <div className="s1-legend">{parts.map(entry)}</div>}
+          {foot && (clampFoot ? <Unfold className="s1-note">{foot}</Unfold> : <p className="s1-note" style={{ marginTop: 4 }}>{foot}</p>)}
         </>
       )}
     </div>
   );
 }
 
+/** Props that make a tile open another Management tab: `to` is { tab, preset } or { loc }. Nothing on
+ *  the public page, which has nowhere to go. */
+function goProps(onGo, to, hint) {
+  if (!onGo) return null;
+  return {
+    "data-go": hint, role: "button", tabIndex: 0, onClick: (e) => { if (!e.target.closest(".s1-unfold-in, .s1-pick")) onGo(to); },
+    onKeyDown: (e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onGo(to); } },
+  };
+}
+
 // shades of the Issues colour, one per department (largest first)
 const DEPT_SHADES = [85, 65, 48, 34, 24, 16].map((n) => `color-mix(in srgb, var(--danger) ${n}%, transparent)`);
 
 /**
- * Issues found in one card, shaped like the visits panel: registered action items (with the change
- * from the period before) on the left, Resolved and Unresolved on the right, and where they stand, their urgency and
- * which departments they went to along the bottom. The department bar is left off the public page.
+ * Issues, observations, clients and stories in one card: registered issues (with the change
+ * from the period before) on the left; resolved, observations, clients reached and stories shared on
+ * the right; where the issues stand, their urgency and which departments they went to along
+ * the bottom. The department bar is left off the public page.
  */
-function IssuesPanel({ F, words, publicView }) {
+function FindingsPanel({ F, words, publicView, onGo }) {
   const ch = trend(F.raised, F.raisedBefore, words.prev, true);
   const statuses = F.byStatus.filter((x) => x.value);
   const depts = F.units.map((u, i) => ({ label: u.unit, value: u.given, color: DEPT_SHADES[i % DEPT_SHADES.length] }));
+  const reactions = [plural(F.likes, "like"), plural(F.comments, "comment"), plural(F.shares, "share")].join(" · ");
   return (
     <div className="card s1-tile s1-panel" style={{ "--tone": TONES.issues }}>
       <div className="s1-panel-top">
-        <div className="s1-panel-main">
-          <div className="s1-top"><p className="s1-label">Registered action items · {words.now.toLowerCase()}</p><ClipboardList size={17} className="s1-icon" /></div>
-          <p className="s1-num s1-big">{F.raised}</p>
+        <div className="s1-panel-main" {...goProps(onGo, { tab: "departments" }, "See every department")}>
+          <div className="s1-top"><p className="s1-label">Issues encountered · {words.now.toLowerCase()}</p><ClipboardList size={17} className="s1-icon" /></div>
+          <p className="s1-num s1-big"><CountUp value={F.raised} /></p>
           {ch && (
             <span className={`s1-trend ${ch.mood}`}>
               {ch.mood === "flat" ? <Minus size={12} /> : ch.up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />} {ch.text}
             </span>
           )}
-          <p className="s1-note">Issues found at offices during visits that a department needs to fix. Their status is as of today.</p>
+          <p className="s1-note">Issues found at offices that a department needs to fix. Status as of today.</p>
         </div>
-        <div className="s1-panel-side">
-          <div className="s1-mini" style={{ "--tone": "var(--success)" }}>
+        <div className="s1-panel-side four">
+          <div className="s1-mini" style={{ "--tone": "var(--success)" }} {...goProps(onGo, { tab: "departments", preset: { focus: "open" } }, "See what's still open")}>
             <div className="s1-top"><span className="s1-label">Resolved</span><CheckCircle2 size={15} className="s1-icon" /></div>
-            <p className="s1-num">{F.fixed}<span className="s1-of"> of {F.raised}</span></p>
+            <p className="s1-num"><CountUp value={F.fixed} /><span className="s1-of"> of {F.raised}</span></p>
             <div className="s1-progress"><span style={{ width: `${pct(F.fixed, F.raised)}%` }} /></div>
-            <p className="s1-note">{F.raised ? `${pct(F.fixed, F.raised)}%${F.daysToFix != null ? ` · ${daysText(F.daysToFix)} on average` : ""}` : "Nothing registered in this period."}</p>
+            <p className="s1-note">
+              {F.raised ? `${pct(F.fixed, F.raised)}%${F.daysToFix != null ? ` · ${daysText(F.daysToFix)} on average` : ""}.` : "Nothing registered."}
+              {F.highOpen ? ` ${F.highOpen} high urgency still open.` : ""}
+            </p>
           </div>
-          <div className="s1-mini">
-            <div className="s1-top"><span className="s1-label">Unresolved</span><CircleDot size={15} className="s1-icon" /></div>
-            <p className="s1-num">{F.open}<span className="s1-of"> of {F.raised}</span></p>
-            <div className="s1-progress"><span style={{ width: `${pct(F.open, F.raised)}%` }} /></div>
-            <p className="s1-note">{F.open ? `${F.highOpen} of them ${F.highOpen === 1 ? "is" : "are"} high urgency.` : "Everything registered is resolved."}</p>
+          <div className="s1-mini" style={{ "--tone": TONES.stories }} {...goProps(onGo, { tab: "people", preset: { sort: "observations" } }, "See who recorded them")}>
+            <div className="s1-top"><span className="s1-label">Observations</span><Eye size={15} className="s1-icon" /></div>
+            <p className="s1-num"><CountUp value={F.observations} /></p>
+            <p className="s1-note">Noted at {plural(F.observationOffices, "office")}.</p>
           </div>
-        </div>
-      </div>
-      <div className="s1-panel-bottom">
-        <MiniBar label="Where they stand" parts={statuses} />
-        <MiniBar label="Urgency" parts={F.byUrgency.filter((x) => x.value)} />
-        {!publicView && <MiniBar label="By department" parts={depts} foot={F.waiting ? `${F.waiting} not given to a department yet.` : null} />}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Observations, clients and stories in one card, shaped like the other two: observations recorded
- * (with the change from the period before) on the left, clients reached and stories shared on the
- * right, and who pointed the observations out and how staff responded to stories along the bottom.
- */
-function ObservationsPanel({ F, words }) {
-  const ch = trend(F.observations, F.observationsBefore, words.prev);
-  const who = [
-    { label: "Referred by BRAC staff", value: F.referred, color: "var(--brand)" },
-    { label: "Noticed by the visitor", value: F.observations - F.referred, color: "color-mix(in srgb, var(--brand) 35%, transparent)" },
-  ];
-  const reactions = [
-    { label: F.likes === 1 ? "Like" : "Likes", value: F.likes, Icon: Heart },
-    { label: F.comments === 1 ? "Comment" : "Comments", value: F.comments, Icon: MessageCircle },
-    { label: F.shares === 1 ? "Share" : "Shares", value: F.shares, Icon: Share2 },
-  ];
-  return (
-    <div className="card s1-tile s1-panel" style={{ "--tone": TONES.stories }}>
-      <div className="s1-panel-top">
-        <div className="s1-panel-main">
-          <div className="s1-top"><p className="s1-label">Observations recorded · {words.now.toLowerCase()}</p><Eye size={17} className="s1-icon" /></div>
-          <p className="s1-num s1-big">{F.observations}</p>
-          {ch && (
-            <span className={`s1-trend ${ch.mood}`}>
-              {ch.mood === "flat" ? <Minus size={12} /> : ch.up ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />} {ch.text}
-            </span>
-          )}
-          <p className="s1-note">Things staff noticed at {plural(F.observationOffices, "office")} that are worth noting.</p>
-        </div>
-        <div className="s1-panel-side">
-          <div className="s1-mini">
+          <div className="s1-mini" style={{ "--tone": TONES.stories }} {...goProps(onGo, { tab: "people", preset: { sort: "talks" } }, "See who talked to them")}>
             <div className="s1-top"><span className="s1-label">Clients reached</span><Users size={15} className="s1-icon" /></div>
-            <p className="s1-num">{F.talks}</p>
-            <p className="s1-note">Conversations with BRAC members at {plural(F.talkBranches, "branch", "branches")}.</p>
+            <p className="s1-num"><CountUp value={F.talks} /></p>
+            <p className="s1-note">At {plural(F.talkBranches, "branch", "branches")}.</p>
           </div>
-          <div className="s1-mini">
+          <div className="s1-mini" style={{ "--tone": TONES.stories }} {...goProps(onGo, { tab: "people", preset: { sort: "stories" } }, "See who shared them")}>
             <div className="s1-top"><span className="s1-label">Stories shared</span><ImageIcon size={15} className="s1-icon" /></div>
-            <p className="s1-num">{F.stories}</p>
-            <p className="s1-note">Field stories posted to the feed.</p>
+            <p className="s1-num"><CountUp value={F.stories} /></p>
+            <p className="s1-note">{reactions}.</p>
           </div>
         </div>
       </div>
       <div className="s1-panel-bottom">
-        <MiniBar label="Who pointed the observations out" parts={who} />
-        <div className="s1-minibar">
-          <p className="s1-label">How staff responded to stories</p>
-          <div className="s1-reacts">
-            {reactions.map(({ label, value, Icon }) => (
-              <span key={label} title={label}><Icon size={18} aria-hidden="true" /><b>{value}</b><em>{label}</em></span>
-            ))}
-          </div>
-        </div>
+        <MiniBar label="Where they stand" parts={statuses} go={goProps(onGo, { tab: "departments", preset: { focus: "open" } }, "See what's still open")} />
+        <MiniBar label="Urgency" parts={F.byUrgency.filter((x) => x.value)} go={goProps(onGo, { tab: "departments", preset: { focus: "high" } }, "See high urgency")} />
+        {!publicView && <MiniBar label="By department" parts={depts} foot={F.waiting ? `${F.waiting} not given to a department yet.` : null} go={goProps(onGo, { tab: "departments" }, "See every department")} />}
       </div>
     </div>
   );

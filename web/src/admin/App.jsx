@@ -131,7 +131,7 @@ function AdminShell({ theme, toggleTheme, onLogout, currentAdmin }) {
   const openBranch = (office) => { setBranchKey(office.key); setTab("branch"); window.scrollTo({ top: 0 }); };
 
   const tabs = [
-    { key: "queue", label: "Action items", short: "Action items", icon: MessageCircle, count: needsAction },
+    { key: "queue", label: "Issues", short: "Issues", icon: MessageCircle, count: needsAction },
     { key: "network", label: "Network health", short: "Network", icon: Radar },
     { key: "departments", label: TERMS.units, short: TERMS.units, icon: Building2 },
     { key: "employees", label: "Employees", short: "People", icon: Users },
@@ -243,8 +243,8 @@ function ComplaintsTab({ complaints, departments, employees, showToast, onRefres
 
   return (
     <div className="page">
-      <PageHead eyebrow="Administrative overview" title="Action items center"
-        desc="Assign action items to each unit's fixers, set deadlines and track progress to resolution, live from the visits database.">
+      <PageHead eyebrow="Administrative overview" title="Issues center"
+        desc="Assign issues to each unit's resolvers, set deadlines and track progress to resolution, live from the visits database.">
         <button className="btn btn-secondary btn-sm" onClick={handleRunCheck} disabled={running}>
           <RefreshCw size={14} className={running ? "spin" : ""} /> {running ? "Checking…" : "Run deadline check"}
         </button>
@@ -252,7 +252,7 @@ function ComplaintsTab({ complaints, departments, employees, showToast, onRefres
 
       {complaints.length === 0 && (
         <div className="card empty-state" style={{ marginBottom: 28 }}>
-          No action items in the database yet. As field staff file action items during their visits, they'll appear here automatically.
+          No issues in the database yet. As field staff file issues during their visits, they'll appear here automatically.
         </div>
       )}
 
@@ -278,23 +278,23 @@ function ComplaintsTab({ complaints, departments, employees, showToast, onRefres
       </div>
 
       <Section title="Waiting for assignment" icon={<AlertCircle size={17} />} color="var(--danger)" count={unassignedList.length}>
-        <ComplaintTable items={unassignedList} onSelect={setSelected} emptyMsg="No action items waiting for assignment." actionLabel="Assign" />
+        <ComplaintTable items={unassignedList} onSelect={setSelected} emptyMsg="No issues waiting for assignment." actionLabel="Assign" />
       </Section>
 
       <Section title="Past deadline" icon={<ShieldAlert size={17} />} color="var(--danger)" count={overdueList.length}>
-        <ComplaintTable items={overdueList} onSelect={setSelected} emptyMsg="No action items past their deadline." actionLabel="Extend deadline" highlightDeadline />
+        <ComplaintTable items={overdueList} onSelect={setSelected} emptyMsg="No issues past their deadline." actionLabel="Extend deadline" highlightDeadline />
       </Section>
 
       <Section title="Assigned / in progress" icon={<Hourglass size={17} />} count={inProgressList.length}>
-        <ComplaintTable items={inProgressList} onSelect={setSelected} emptyMsg="No action items being worked on." actionLabel="View" />
+        <ComplaintTable items={inProgressList} onSelect={setSelected} emptyMsg="No issues being worked on." actionLabel="View" />
       </Section>
 
       <Section title="Long term" icon={<Hourglass size={17} />} color="var(--warning)" count={longTermList.length}>
-        <ComplaintTable items={longTermList} onSelect={setSelected} emptyMsg="No long-term action items." actionLabel="View" />
+        <ComplaintTable items={longTermList} onSelect={setSelected} emptyMsg="No long-term issues." actionLabel="View" />
       </Section>
 
       <Section title="Fixed" icon={<CheckSquare size={17} />} color="var(--success)" count={resolvedList.length}>
-        <ComplaintTable items={resolvedShown} onSelect={setSelected} emptyMsg="No fixed action items yet." actionLabel="View" />
+        <ComplaintTable items={resolvedShown} onSelect={setSelected} emptyMsg="No fixed issues yet." actionLabel="View" />
         {resolvedList.length > 8 && (
           <div style={{ textAlign: "center", marginTop: 14 }}>
             <button className="btn btn-secondary btn-sm" onClick={() => setShowResolved((s) => !s)}>
@@ -339,7 +339,7 @@ function ComplaintTable({ items, onSelect, emptyMsg, actionLabel, highlightDeadl
       <table className="ctable stack">
         <thead>
           <tr>
-            <th>ID</th><th>Office</th><th>{TERMS.unit} / {lower(TERMS.team)}</th><th>Action item</th><th>Status</th><th>Urgency</th>
+            <th>ID</th><th>Office</th><th>{TERMS.unit} / {lower(TERMS.team)}</th><th>Issue</th><th>Status</th><th>Urgency</th>
             <th>Deadline</th><th>Assigned to</th><th style={{ textAlign: "right" }}>Action</th>
           </tr>
         </thead>
@@ -352,7 +352,7 @@ function ComplaintTable({ items, onSelect, emptyMsg, actionLabel, highlightDeadl
                 <div className="cell-main">{c.department || "Unassigned"}{c.source && <span className="source-badge" style={{ marginLeft: 6 }}>{c.source}</span>}</div>
                 {c.unit && <div className="cell-sub">{c.unit}</div>}
               </td>
-              <td data-label="Action item">
+              <td data-label="Issue">
                 <div className="cell-main">{complaintTitle(c)}</div>
                 <div className="cell-clip cell-sub">{c.description}</div>
                 {c.person?.name && <div className="cell-sub">Raised by {c.person.name}</div>}
@@ -387,7 +387,7 @@ function Journey({ c }) {
   ];
   const now = steps.findIndex((s) => !s.done);
   return (
-    <div className="journey" aria-label="Action item progress">
+    <div className="journey" aria-label="Issue progress">
       {steps.map((s, i) => (
         <div key={s.label} className={`jr-step ${s.done ? "done" : ""} ${resolved ? "all" : ""} ${i === now ? "now" : ""} ${s.alert ? "alert" : ""}`}>
           <span className="jr-dot">{(s.done || s.alert) && <Check size={13} strokeWidth={3.2} />}</span>
@@ -422,7 +422,7 @@ function ComplaintModal({ complaint: c, departments, employees, onClose, showToa
         days,
       });
       await onRefresh();
-      showToast(`Action item assigned. ${mailNote(emails)}`);
+      showToast(`Issue assigned. ${mailNote(emails)}`);
       onClose();
     } catch (err) {
       showToast(err.message);
@@ -483,9 +483,9 @@ function ComplaintModal({ complaint: c, departments, employees, onClose, showToa
             {meta("Visit reason", c.visitReason)}
             {meta(TERMS.unit, c.department)}
             {meta(TERMS.team, c.unit)}
-            {meta("Assigned to", c.assignedTo && `${c.department} fixers: ${c.assignedTo}`)}
+            {meta("Assigned to", c.assignedTo && `${c.department} resolvers: ${c.assignedTo}`)}
             {meta("Work started", c.startedBy && `${c.startedBy}${c.startedAt ? ` · ${new Date(c.startedAt).toLocaleDateString()}` : ""}`)}
-            {meta("Long term", statusOf(c) === "Long Term" && (c.longTermNote || "Marked long term by a fixer"))}
+            {meta("Long term", statusOf(c) === "Long Term" && (c.longTermNote || "Marked long term by a resolver"))}
             {meta("Deadline", c.deadline && new Date(c.deadline).toLocaleString())}
           </div>
 
@@ -495,7 +495,7 @@ function ComplaintModal({ complaint: c, departments, employees, onClose, showToa
 
               {isOther ? (
                 <div className="field-group">
-                  <label className="field-label">This action item was filed as "{UNDEFINED_UNIT}" — choose the real {lower(TERMS.unit)}</label>
+                  <label className="field-label">This issue was filed as "{UNDEFINED_UNIT}" — choose the real {lower(TERMS.unit)}</label>
                   <select className="select" value={deptId} onChange={(e) => { setDeptId(e.target.value); setUnitName(""); }}>
                     {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
@@ -511,7 +511,7 @@ function ComplaintModal({ complaint: c, departments, employees, onClose, showToa
                 </div>
               ) : (
                 <div className="field-group">
-                  <label className="field-label">{TERMS.unit} (from action item)</label>
+                  <label className="field-label">{TERMS.unit} (from issue)</label>
                   <input className="input" value={c.department} disabled />
                 </div>
               )}
@@ -519,15 +519,15 @@ function ComplaintModal({ complaint: c, departments, employees, onClose, showToa
               <div className="auto-assign-box">
                 <UserCheck size={15} style={{ flexShrink: 0 }} />
                 {previewFixers.length
-                  ? `Will assign to this ${lower(TERMS.unit)}'s ${previewFixers.length === 1 ? "fixer" : `${previewFixers.length} fixers`}: ${previewFixers.map((e) => e.name).join(", ")}. Any fixer in the unit can update it.`
-                  : `No fixer is set up in this ${lower(TERMS.unit)} yet — add one under Employees first.`}
+                  ? `Will assign to this ${lower(TERMS.unit)}'s ${previewFixers.length === 1 ? "resolver" : `${previewFixers.length} resolvers`}: ${previewFixers.map((e) => e.name).join(", ")}. Any fixer in the unit can update it.`
+                  : `No resolver is set up in this ${lower(TERMS.unit)} yet — add one under Employees first.`}
               </div>
 
               <div className="field-group" style={{ marginTop: 14 }}>
                 <label className="field-label">Days to fix</label>
                 <input type="number" min="1" max="60" className="input" value={days} onChange={(e) => setDays(e.target.value)} />
                 <p style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 6 }}>
-                  A reminder email is sent to the fixers {Number(days) > 2 ? "48" : "24"} hours before the deadline.
+                  A reminder email is sent to the resolvers {Number(days) > 2 ? "48" : "24"} hours before the deadline.
                 </p>
               </div>
 
@@ -541,14 +541,14 @@ function ComplaintModal({ complaint: c, departments, employees, onClose, showToa
             <div className="card card-pad" style={isOverdue(c) ? { background: "var(--danger-wash)", borderColor: "transparent" } : { background: "var(--paper)" }}>
               <p className="field-label" style={isOverdue(c) ? { color: "var(--danger)" } : undefined}>{isOverdue(c) ? "Past deadline — extend" : "Extend deadline"}</p>
               <p style={{ fontSize: 12.5, color: "var(--ink-soft)", marginBottom: 14 }}>
-                Sets a new deadline from today and notifies the unit's fixers. A reminder is sent again before the new deadline.
+                Sets a new deadline from today and notifies the unit's resolvers. A reminder is sent again before the new deadline.
               </p>
               <div className="field-group">
                 <label className="field-label">Additional days</label>
                 <input type="number" min="1" max="60" className="input" value={extendDays} onChange={(e) => setExtendDays(e.target.value)} />
               </div>
               <button className="btn btn-danger btn-block" onClick={handleExtend} disabled={busy}>
-                Extend deadline &amp; notify fixers
+                Extend deadline &amp; notify resolvers
               </button>
             </div>
           )}
@@ -633,7 +633,7 @@ function DepartmentsTab({ departments, setDepartments, employees, complaints, sh
   return (
     <div className="page">
       <PageHead eyebrow="Configuration" title={TERMS.units}
-        desc={`Action items are filed against a ${lower(TERMS.unit)} and one of its ${lower(TERMS.teams)}. They are routed to all of that ${lower(TERMS.unit)}'s fixers (any of them can resolve one) — or, for "Undefined" (the filer wasn't sure), to whichever ${lower(TERMS.unit)} you pick when assigning.`} />
+        desc={`Issues are filed against a ${lower(TERMS.unit)} and one of its ${lower(TERMS.teams)}. They are routed to all of that ${lower(TERMS.unit)}'s resolvers (any of them can resolve one) — or, for "Undefined" (the filer wasn't sure), to whichever ${lower(TERMS.unit)} you pick when assigning.`} />
 
       <Reveal className="card card-pad" style={{ marginBottom: 20, maxWidth: 460 }}>
         <label className="field-label">Add a {lower(TERMS.unit)}</label>
@@ -646,7 +646,7 @@ function DepartmentsTab({ departments, setDepartments, employees, complaints, sh
 
       <div className="ctable-wrap">
         <table className="ctable stack">
-          <thead><tr><th>{TERMS.unit}</th><th>{TERMS.teams}</th><th>Fixers</th><th>People</th><th>Open</th><th>Fixed</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
+          <thead><tr><th>{TERMS.unit}</th><th>{TERMS.teams}</th><th>Resolvers</th><th>People</th><th>Open</th><th>Fixed</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
           <tbody>
             {rows.map(({ d, fixers, team, open, resolved, unitCounts }) => (
               <React.Fragment key={d.id}>
@@ -657,7 +657,7 @@ function DepartmentsTab({ departments, setDepartments, employees, complaints, sh
                       : <strong>{d.name}</strong>}
                   </td>
                   <td data-label={TERMS.teams}><span className="pill pill-brand">{(d.units || []).length} {lower(TERMS.team)}{(d.units || []).length === 1 ? "" : "s"}</span></td>
-                  <td data-label="Fixers">{fixers.length ? fixers.map((e) => e.name).join(", ") : <span className="pill pill-stale">No fixer yet</span>}</td>
+                  <td data-label="Resolvers">{fixers.length ? fixers.map((e) => e.name).join(", ") : <span className="pill pill-stale">No resolver yet</span>}</td>
                   <td data-label="People">{team}</td>
                   <td data-label="Open">{open > 0 ? <span className="pill pill-stale">{open}</span> : <span style={{ color: "var(--ink-faint)" }}>0</span>}</td>
                   <td data-label="Fixed">{resolved}</td>
@@ -720,13 +720,13 @@ function UnitsEditor({ dept, counts, setDepartments, showToast }) {
     if (confirmId !== u.id) { setConfirmId(u.id); return; }
     mutate((us) => us.filter((x) => x.id !== u.id));
     setConfirmId(null);
-    showToast(`${TERMS.team} "${u.name}" removed${counts[u.id] ? ` — its ${counts[u.id]} existing action item(s) keep the name` : ""}.`);
+    showToast(`${TERMS.team} "${u.name}" removed${counts[u.id] ? ` — its ${counts[u.id]} existing issue(s) keep the name` : ""}.`);
   };
 
   return (
     <div className="units-editor">
       <p className="field-label" style={{ marginBottom: 10 }}>{TERMS.teams} in {dept.name}</p>
-      {units.length === 0 && <p style={{ fontSize: 12.5, color: "var(--ink-faint)", margin: "0 0 12px" }}>No {lower(TERMS.teams)} yet — action items for this {lower(TERMS.unit)} will be filed without one.</p>}
+      {units.length === 0 && <p style={{ fontSize: 12.5, color: "var(--ink-faint)", margin: "0 0 12px" }}>No {lower(TERMS.teams)} yet — issues for this {lower(TERMS.unit)} will be filed without one.</p>}
       <div className="unit-list">
         {units.map((u) => (
           <div className="unit-row" key={u.id}>
@@ -740,7 +740,7 @@ function UnitsEditor({ dept, counts, setDepartments, showToast }) {
             ) : (
               <>
                 <span className="unit-name">{u.name}</span>
-                <span className="unit-count">{counts[u.id] || 0} action item{counts[u.id] === 1 ? "" : "s"}</span>
+                <span className="unit-count">{counts[u.id] || 0} issue{counts[u.id] === 1 ? "" : "s"}</span>
                 <button className="btn btn-ghost btn-sm" onClick={() => { setEditing({ id: u.id, value: u.name }); setConfirmId(null); }}><Edit3 size={12} /> Rename</button>
                 <button className={`btn btn-sm ${confirmId === u.id ? "btn-danger" : "btn-ghost"}`} onClick={() => remove(u)}>
                   <Trash2 size={12} /> {confirmId === u.id ? "Confirm" : "Remove"}
@@ -766,7 +766,7 @@ function UnitsEditor({ dept, counts, setDepartments, showToast }) {
 // (an employee can be more than one, e.g. a base user who is also management);
 // admins sign in here and are listed under "Admin accounts".
 const ROLE_OPTIONS = ["field", "fixer", "management"];
-const ROLE_LABELS = { field: "Base user", fixer: "Fixer", management: "Management", supervisor: "Management" };
+const ROLE_LABELS = { field: "Base user", fixer: "Resolver", management: "Management", supervisor: "Management" };
 const roleLabel = (r) => ROLE_LABELS[r] || r;
 const emptyEmployeeForm = () => ({ name: "", phone: "", email: "", password: "", pin: "", departmentId: "", teamId: "", supervisorId: "", roles: ["field"], designation: "", department: "" });
 
@@ -793,7 +793,7 @@ function EmployeesTab({ employees, reloadEmployees, departments, showToast, curr
     if (pinTaken) { showToast("That PIN is already used by another employee — PINs must be unique."); return; }
 
     // A unit can have any number of fixers; complaints go to all of them.
-    if (form.roles.includes("fixer") && !form.departmentId) { showToast(`A fixer needs a ${lower(TERMS.unit)}, so their queue knows which action items are theirs.`); return; }
+    if (form.roles.includes("fixer") && !form.departmentId) { showToast(`A resolver needs a ${lower(TERMS.unit)}, so their queue knows which issues are theirs.`); return; }
 
     if (!editingId && !form.password) { showToast("Give the new employee a password."); return; }
     try {
@@ -833,7 +833,7 @@ function EmployeesTab({ employees, reloadEmployees, departments, showToast, curr
 
   return (
     <div className="page">
-      <PageHead eyebrow="Configuration" title="Employees" desc={`Add employees, assign them a ${lower(TERMS.unit)} and supervisor, and choose what kind of user they are: Base user, Fixer or Management. Admin accounts are at the bottom.`}>
+      <PageHead eyebrow="Configuration" title="Employees" desc={`Add employees, assign them a ${lower(TERMS.unit)} and supervisor, and choose what kind of user they are: Base user, Resolver or Management. Admin accounts are at the bottom.`}>
         {!formOpen && <button className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)}><Plus size={14} strokeWidth={2.6} /> Add employee</button>}
       </PageHead>
 
@@ -908,8 +908,8 @@ function EmployeesTab({ employees, reloadEmployees, departments, showToast, curr
                 ))}
               </div>
               <p style={{ fontSize: 11.5, color: "var(--ink-faint)", marginTop: 8 }}>
-                <b>Base user</b>: registers visits and records action items, client interactions, observations and stories.
-                {" "}<b>Fixer</b>: also gets a queue of their {lower(TERMS.unit)}'s action items to resolve. A {lower(TERMS.unit)} can have several fixers; any one of them can resolve an action item.
+                <b>Base user</b>: registers visits and records issues, client interactions, observations and stories.
+                {" "}<b>Resolver</b>: also gets a queue of their {lower(TERMS.unit)}'s issues to resolve. A {lower(TERMS.unit)} can have several resolvers; any one of them can resolve an issue.
                 {" "}<b>Management</b>: also gets the Management section (summary, offices, people, analytics) and can be set as a supervisor.
               </p>
             </div>
@@ -1067,7 +1067,7 @@ function SentEmailsTab({ emailLog, onRefresh }) {
   return (
     <div className="page">
       <PageHead eyebrow="Audit trail" title="Sent emails"
-        desc="Every email the system has sent or tried to send: assignment, reminder and extension notices to fixers, and test emails. Set up the sending account under Email settings.">
+        desc="Every email the system has sent or tried to send: assignment, reminder and extension notices to resolvers, and test emails. Set up the sending account under Email settings.">
         <button className="btn btn-secondary btn-sm" onClick={onRefresh}><RefreshCw size={13} /> Refresh</button>
       </PageHead>
 

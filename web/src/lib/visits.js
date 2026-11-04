@@ -14,7 +14,7 @@
 export const UNDEFINED_UNIT = "Undefined";
 // "Purpose of visit" choices. The admin edits the list (Admin → Locations & lists → settings.visitPurposes);
 // these are the defaults. "Other" is always offered last, with a typed reason.
-export const DEFAULT_PURPOSES = ["Onboarding", "Monitoring", "Training", "Action item resolution", "Survey"];
+export const DEFAULT_PURPOSES = ["Onboarding", "Monitoring", "Training", "Issue resolution", "Survey"];
 export const purposesOf = (settings) => [...(settings?.visitPurposes?.length ? settings.visitPurposes : DEFAULT_PURPOSES).filter((p) => p !== "Other"), "Other"];
 export const REASONS = [...DEFAULT_PURPOSES, "Other"];
 
@@ -24,16 +24,17 @@ export const voName = (code, branch) => `${code} · ${branch}`;
 export const voBranch = (vo) => String(vo).split(" · ")[1] || "";
 export const voCode = (vo) => String(vo).split(" · ")[0] || "";
 
-// Where people stay on multi-day visits. BRAC Learning Centres first; the list is a
-// starting point (centres confirmed from public sources) — "Other BLC" takes any name.
+// Where people stay on multi-day visits. BRAC Learning Centres first. The admin keeps the BLC list
+// (Admin → Locations & lists → settings.blcs); these are the defaults. "Other BLC" takes any name.
 export const STAY_TYPES = ["BRAC Learning Centre (BLC)", "Hotel", "Guest house", "BRAC office", "Other"];
 export const BLCS = [
   "BLC Barishal", "BLC Chattogram", "BLC Cox's Bazar", "BLC Faridpur",
   "BLC Jashore", "BLC Khulna (Khalishpur)", "BLC Rajshahi", "BLC Sylhet",
 ];
+export const blcsOf = (settings) => (settings?.blcs?.length ? settings.blcs : BLCS);
 
 export const ENTRY_TYPES = {
-  complaint: { list: "complaints", label: "Action item", plural: "Action items", prefix: "FC" },
+  complaint: { list: "complaints", label: "Issue encountered", plural: "Issues encountered", prefix: "FC" },
   interaction: { list: "interactions", label: "Client interaction", plural: "Client interactions", prefix: "CI" },
   observation: { list: "observations", label: "Observation", plural: "Observations", prefix: "OB" },
   story: { list: "stories", label: "Story", plural: "Stories", prefix: "ST" },
@@ -73,10 +74,21 @@ export const shortName = (name) => String(name || "").replace(/ Branch$/, "");
 export const plural = (n, one, many) => `${n} ${n === 1 ? one : many || `${one}s`}`;
 export const mmss = (s) => `${Math.floor(s / 60)}:${pad2(Math.round(s) % 60)}`;
 
+/** "1 day", "3 days": from the visit date to the return date, both counted. */
+export function tripDays(v) {
+  if (!v.date || !v.returnDate || v.returnDate < v.date) return "";
+  const n = Math.round((new Date(`${v.returnDate}T00:00`) - new Date(`${v.date}T00:00`)) / 86400000) + 1;
+  return `${n} day${n > 1 ? "s" : ""}`;
+}
 export const tripStart = (v) => new Date(`${v.date}T${v.visitTime || "00:00"}`);
 export const tripReturn = (v) => (v.returnDate ? new Date(`${v.returnDate}T${v.returnTime || "23:59"}`) : null);
 export const reasonText = (v) => (v.reason === "Other" ? (v.reasonOther || "").trim() || "Other" : v.reason || "");
-export const tripTitle = (v) => v.area || v.region || v.division || v.stops?.[0]?.name || (v.date ? `Visit · ${fmtDate(v.date)}` : "Visit");
+/** "Kaligonj +2": the first office, and how many more (older visits without offices: their area). */
+export const tripTitle = (v) => {
+  const offices = (v.stops || []).filter((s) => s.kind !== "vo");
+  if (offices.length) return `${shortName(offices[0].name)}${offices.length > 1 ? ` +${offices.length - 1}` : ""}`;
+  return v.area || v.region || v.division || (v.date ? `Visit · ${fmtDate(v.date)}` : "Visit");
+};
 export const tripPath = (v) => [v.division, v.region, v.area].filter(Boolean).join(" › ");
 
 /** "Mon 12 Oct, 9:30 AM → Tue 13 Oct" */
@@ -187,7 +199,8 @@ export function expandVisits(trips) {
       return groups.get(key);
     };
     if (v.status === "done") {
-      (v.stops || []).forEach((s) => { const p = placeOfStop(s, v); group(placeKey(p), p); });
+      // a stop it couldn't visit doesn't count as visited
+      (v.stops || []).filter((s) => !s.skipped).forEach((s) => { const p = placeOfStop(s, v); group(placeKey(p), p); });
     }
     ENTRY_ORDER.forEach((t) => (v[ENTRY_TYPES[t].list] || []).forEach((e) => {
       if (isDraft(e)) return;
@@ -245,7 +258,7 @@ export function submittedComplaints(trips) {
 
 /* ---------- fixers ---------- */
 
-/** A complaint is assigned to a unit's fixers as a group: it is in my queue if I'm a fixer of
+/** A complaint is assigned to a unit's resolvers as a group: it is in my queue if I'm a fixer of
  *  that unit (including one added after it was assigned), or was named on it when assigned. */
 export function inFixerQueue(c, me) {
   if (!c.assignedEmployeeId && !c.assignedDepartmentId) return false;

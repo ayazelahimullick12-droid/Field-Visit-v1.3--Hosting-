@@ -4,7 +4,7 @@
  * A visit is one JSON document:
  *   { id, employeeId, employeeName, division, region, area, stops[], reason, date, returnDate,
  *     stays[], status: "open" | "done", complaints[], interactions[], observations[], stories[] }
- * ("complaints" are the Action items on screen; the stored name never changed.)
+ * ("complaints" are the Issues on screen; the stored name never changed.)
  *
  * Entries are drafts the field person can change until they submit each one. A submitted entry
  * is locked: the server keeps its own copy (which may carry the admin's assignment, the fixer's
@@ -14,7 +14,7 @@
 
 export const ENTRY_LISTS = ['complaints', 'interactions', 'observations', 'stories'] as const;
 
-/** A newly submitted entry; a new action item also gets the fields the admin's workflow needs. */
+/** A newly submitted entry; a new issue also gets the fields the admin's workflow needs. */
 function stampEntry(list: string, entry: any, visit: any, now: Date) {
   const at = now.toISOString();
   const out = { ...entry, state: 'submitted', submittedAt: entry.submittedAt || at };
@@ -31,7 +31,7 @@ function stampEntry(list: string, entry: any, visit: any, now: Date) {
     deadline: null,
     escalationApproved: false,
     resolutionNotes: null,
-    log: [{ label: 'Action item submitted', time: now.toLocaleString() }],
+    log: [{ label: 'Issue submitted', time: now.toLocaleString() }],
   };
 }
 
@@ -55,7 +55,7 @@ export function mergeVisit(prev: any | null, body: any, id: string) {
   return next;
 }
 
-/** Is this action item in this fixer's queue? (assigned to their unit, or named on it) */
+/** Is this issue in this fixer's queue? (assigned to their unit, or named on it) */
 export function inFixerQueue(c: any, me: { id: string; roles: string[]; departmentId: string | null }) {
   if (!c.assignedEmployeeId && !c.assignedDepartmentId) return false;
   if (c.assignedDepartmentId && me.departmentId === c.assignedDepartmentId && me.roles.includes('fixer')) return true;
@@ -65,7 +65,7 @@ export function inFixerQueue(c: any, me: { id: string; roles: string[]; departme
 /**
  * What one person may see of a visit. Admins, management and the visit's owner see everything.
  * Everyone else sees only the visit's outline plus its submitted stories (the story feed) and,
- * for fixers, the action items in their queue. Returns null when nothing is visible.
+ * for fixers, the issues in their queue. Returns null when nothing is visible.
  */
 export function visibleTo(user: { kind: string; id: string; roles: string[]; departmentId: string | null }, v: any) {
   if (user.kind === 'admin' || user.roles.includes('management') || v.employeeId === user.id) return v;

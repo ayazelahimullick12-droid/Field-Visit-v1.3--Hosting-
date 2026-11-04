@@ -65,7 +65,7 @@ export class PeopleController {
     // a team only counts if it belongs to the chosen unit
     const teamId = clean(body?.teamId);
     const team = teamId && departmentId ? await this.prisma.unit.findFirst({ where: { id: teamId, departmentId } }) : null;
-    if (roles.includes('fixer') && !departmentId) throw new UserError('A fixer needs a unit, so their queue knows which action items are theirs.');
+    if (roles.includes('fixer') && !departmentId) throw new UserError('A resolver needs a unit, so their queue knows which issues are theirs.');
 
     const data: any = {
       name, pin, email, roles,
